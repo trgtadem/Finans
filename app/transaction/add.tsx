@@ -3,10 +3,11 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, useCol
 import { useFinanceStore, TransactionType, PaymentMethod } from '../../src/store/useFinanceStore';
 import { Colors, Spacing, Radius } from '../../src/theme';
 import { CreditCard, Banknote, Check } from 'lucide-react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 
 export default function AddTransactionScreen() {
     const router = useRouter();
+    const params = useLocalSearchParams<{ date?: string }>();
     const { addTransaction, incomeCategories, expenseCategories } = useFinanceStore();
     const colorScheme = useColorScheme() ?? 'light';
     const theme = Colors[colorScheme];
@@ -16,6 +17,8 @@ export default function AddTransactionScreen() {
     const [amount, setAmount] = useState(''); // Stores raw number string
     const [category, setCategory] = useState('');
     const [note, setNote] = useState('');
+
+    const transactionDate = params.date || new Date().toISOString();
 
     const currentCategories = type === 'income' ? incomeCategories : expenseCategories;
 
@@ -59,7 +62,7 @@ export default function AddTransactionScreen() {
             amount: numericAmount,
             category,
             note,
-            date: new Date().toISOString(),
+            date: transactionDate,
         });
 
         router.back();

@@ -15,12 +15,21 @@ export interface Transaction {
     date: string; // ISO string
 }
 
+export interface Reminder {
+    id: string;
+    note: string;
+    date: string; // ISO string
+}
+
 interface FinanceState {
     transactions: Transaction[];
+    reminders: Reminder[];
     incomeCategories: string[];
     expenseCategories: string[];
     addTransaction: (transaction: Omit<Transaction, 'id'>) => void;
     deleteTransaction: (id: string) => void;
+    addReminder: (reminder: Omit<Reminder, 'id'>) => void;
+    deleteReminder: (id: string) => void;
     addCategory: (type: TransactionType, name: string) => void;
     deleteCategory: (type: TransactionType, name: string) => void;
     getTotalBalance: () => number;
@@ -30,6 +39,7 @@ export const useFinanceStore = create<FinanceState>()(
     persist(
         (set, get) => ({
             transactions: [],
+            reminders: [],
             incomeCategories: ['Maaş', 'Satış', 'Bonus', 'Faiz', 'Diğer'],
             expenseCategories: ['Gıda', 'Ulaşım', 'Eğlence', 'Kira', 'Fatura', 'Genel'],
 
@@ -46,6 +56,20 @@ export const useFinanceStore = create<FinanceState>()(
 
             deleteTransaction: (id) => set((state) => ({
                 transactions: state.transactions.filter(t => t.id !== id)
+            })),
+
+            addReminder: (reminder) => set((state) => ({
+                reminders: [
+                    ...state.reminders,
+                    {
+                        ...reminder,
+                        id: Math.random().toString(36).substring(7)
+                    }
+                ]
+            })),
+
+            deleteReminder: (id) => set((state) => ({
+                reminders: state.reminders.filter(r => r.id !== id)
             })),
 
             addCategory: (type, name) => set((state) => {

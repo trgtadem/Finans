@@ -50,9 +50,9 @@ export default function ProfileScreen() {
                 <Text style={[styles.sectionTitle, { color: theme.text }]}>Ayarlar</Text>
                 <View style={[styles.settingsList, { backgroundColor: theme.surface }]}>
                     <Link href="/settings/categories" asChild>
-                        <TouchableOpacity style={[styles.settingsItem, { borderBottomColor: theme.border }]}>
+                        <TouchableOpacity style={styles.settingsItem}>
                             <Settings size={20} color={theme.primary} />
-                            <Text style={[styles.settingsItemText, { color: theme.text }]}>Hızlı Notları Düzenle (Kategoriler)</Text>
+                            <Text style={[styles.settingsItemText, { color: theme.text }]}>Hızlı Notları Düzenle</Text>
                         </TouchableOpacity>
                     </Link>
                     <Link href="/settings/security" asChild>
