@@ -165,70 +165,71 @@ export default function CalendarScreen() {
                     </View>
                 }
             />
-            );
+        </View>
+    );
 }
 
-            const styles = StyleSheet.create({
-                container: {
-                flex: 1,
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
     },
-            listHeader: {
-                flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: Spacing.md,
-            marginTop: Spacing.sm,
+    listHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: Spacing.md,
+        marginTop: Spacing.sm,
     },
-            listTitle: {
-                fontSize: 18,
-            fontWeight: 'bold',
+    listTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
     },
-            addButton: {
-                width: 36,
-            height: 36,
-            borderRadius: 18,
-            justifyContent: 'center',
-            alignItems: 'center',
+    addButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
-            listContent: {
-                paddingHorizontal: Spacing.md,
-            paddingBottom: Spacing.xl,
+    listContent: {
+        paddingHorizontal: Spacing.md,
+        paddingBottom: Spacing.xl,
     },
-            transactionItem: {
-                flexDirection: 'row',
-            alignItems: 'center',
-            padding: Spacing.md,
-            marginBottom: Spacing.sm,
-            borderRadius: Radius.md,
+    transactionItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: Spacing.md,
+        marginBottom: Spacing.sm,
+        borderRadius: Radius.md,
     },
-            iconBox: {
-                width: 40,
-            height: 40,
-            borderRadius: Radius.md,
-            justifyContent: 'center',
-            alignItems: 'center',
-            marginRight: Spacing.md,
+    iconBox: {
+        width: 40,
+        height: 40,
+        borderRadius: Radius.md,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: Spacing.md,
     },
-            transactionInfo: {
-                flex: 1,
+    transactionInfo: {
+        flex: 1,
     },
-            itemCategory: {
-                fontSize: 15,
-            fontWeight: '600',
+    itemCategory: {
+        fontSize: 15,
+        fontWeight: '600',
     },
-            itemNote: {
-                fontSize: 12,
-            marginTop: 2,
+    itemNote: {
+        fontSize: 12,
+        marginTop: 2,
     },
-            amountText: {
-                fontSize: 15,
-            fontWeight: 'bold',
+    amountText: {
+        fontSize: 15,
+        fontWeight: 'bold',
     },
-            emptyState: {
-                padding: Spacing.xl,
-            alignItems: 'center',
+    emptyState: {
+        padding: Spacing.xl,
+        alignItems: 'center',
     },
-            emptyText: {
-                fontSize: 14,
+    emptyText: {
+        fontSize: 14,
     }
 });

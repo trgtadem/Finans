@@ -32,6 +32,7 @@ interface FinanceState {
     deleteReminder: (id: string) => void;
     addCategory: (type: TransactionType, name: string) => void;
     deleteCategory: (type: TransactionType, name: string) => void;
+    resetData: () => void;
     getTotalBalance: () => number;
 }
 
@@ -81,6 +82,13 @@ export const useFinanceStore = create<FinanceState>()(
             deleteCategory: (type, name) => set((state) => {
                 const key = type === 'income' ? 'incomeCategories' : 'expenseCategories';
                 return { [key]: state[key].filter(c => c !== name) };
+            }),
+
+            resetData: () => set({
+                transactions: [],
+                reminders: [],
+                incomeCategories: ['Maaş', 'Satış', 'Bonus', 'Faiz', 'Diğer'],
+                expenseCategories: ['Gıda', 'Ulaşım', 'Eğlence', 'Kira', 'Fatura', 'Genel']
             }),
 
             getTotalBalance: () => {
