@@ -50,7 +50,6 @@ export default function SecurityScreen() {
                     </TouchableOpacity>
                 </View>
             </View>
-
             <View style={styles.section}>
                 <TouchableOpacity style={[styles.logoutBtn, { borderColor: theme.danger }]} onPress={logout}>
                     <Text style={{ color: theme.danger, fontWeight: 'bold' }}>Çıkış Yap</Text>
