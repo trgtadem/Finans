@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert, Modal, TextInput, Keyb
 import { useFinanceStore } from '../../src/store/useFinanceStore';
 import { useAuthStore } from '../../src/store/useAuthStore';
 import { Spacing, Radius } from '../../src/theme';
-import { Settings, Lock, Trash2, Trophy, RotateCcw, X, LogOut, Palette } from 'lucide-react-native';
+import { Settings, Lock, Trash2, Trophy, RotateCcw, X, LogOut, Palette, FileText } from 'lucide-react-native';
 import { Link } from 'expo-router';
 import { useAppTheme } from '../../src/theme/useAppTheme';
 
@@ -205,6 +205,12 @@ export default function ProfileScreen() {
                         <TouchableOpacity style={styles.settingsItem}>
                             <Palette size={20} color={theme.primary} />
                             <Text style={[styles.settingsItemText, { color: theme.text }]}>Tema Ayarları</Text>
+                        </TouchableOpacity>
+                    </Link>
+                    <Link href="/reports" asChild>
+                        <TouchableOpacity style={styles.settingsItem}>
+                            <FileText size={20} color={theme.primary} />
+                            <Text style={[styles.settingsItemText, { color: theme.text }]}>Raporlarım</Text>
                         </TouchableOpacity>
                     </Link>
                     <TouchableOpacity style={styles.settingsItem} onPress={logout}>
