@@ -13,7 +13,7 @@ import {
 } from 'lucide-react-native';
 import { format, parseISO, startOfMonth, subDays } from 'date-fns';
 import { tr } from 'date-fns/locale';
-import Constants from 'expo-constants';
+import { requireOptionalNativeModule } from 'expo-modules-core';
 import { useFinanceStore, Transaction } from '../../src/store/useFinanceStore';
 import { Spacing, Radius } from '../../src/theme';
 import { useAppTheme } from '../../src/theme/useAppTheme';
@@ -63,6 +63,8 @@ export default function ReportsScreen() {
     const { theme } = useAppTheme();
     const [selectedRange, setSelectedRange] = useState<RangeKey>('month');
     const [isExporting, setIsExporting] = useState(false);
+    const hasNativePrintModule = Boolean(requireOptionalNativeModule('ExpoPrint'));
+    const hasNativeSharingModule = Boolean(requireOptionalNativeModule('ExpoSharing'));
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(amount);
@@ -389,14 +391,10 @@ export default function ReportsScreen() {
             return;
         }
 
-        const appOwnership = Constants.appOwnership;
-        const executionEnvironment = (Constants as unknown as { executionEnvironment?: string }).executionEnvironment;
-        const isExpoGo = appOwnership === 'expo' || executionEnvironment === 'storeClient';
-
-        if (isExpoGo) {
+        if (!hasNativePrintModule) {
             Alert.alert(
                 'PDF Kullanılamıyor',
-                'Bu özellik Expo Go içinde desteklenmiyor. PDF dışa aktarma için development build veya native build kullanın.'
+                'Bu ortamda PDF modülü bulunamadı. Development build veya native build kullanın.'
             );
             return;
         }
@@ -404,12 +402,8 @@ export default function ReportsScreen() {
         try {
             setIsExporting(true);
             const printModule = await import('expo-print');
-            const sharingModule = await import('expo-sharing');
             const printToFileAsync =
                 printModule.printToFileAsync ?? printModule.default?.printToFileAsync;
-            const isAvailableAsync =
-                sharingModule.isAvailableAsync ?? sharingModule.default?.isAvailableAsync;
-            const shareAsync = sharingModule.shareAsync ?? sharingModule.default?.shareAsync;
 
             if (typeof printToFileAsync !== 'function') {
                 throw new Error('PRINT_UNAVAILABLE');
@@ -417,19 +411,27 @@ export default function ReportsScreen() {
 
             const html = buildPdfHtml();
             const { uri } = await printToFileAsync({ html });
-            const canShare = typeof isAvailableAsync === 'function' ? await isAvailableAsync() : false;
 
-            if (canShare && typeof shareAsync === 'function') {
-                await shareAsync(uri, {
-                    mimeType: 'application/pdf',
-                    dialogTitle: 'Ekstre PDF paylaş',
-                });
-            } else {
-                const message = Platform.OS === 'web'
-                    ? 'PDF oluşturuldu, tarayıcı indirmeleri kontrol edebilirsiniz.'
-                    : `PDF oluşturuldu: ${uri}`;
-                Alert.alert('PDF Hazır', message);
+            if (hasNativeSharingModule) {
+                const sharingModule = await import('expo-sharing');
+                const isAvailableAsync =
+                    sharingModule.isAvailableAsync ?? sharingModule.default?.isAvailableAsync;
+                const shareAsync = sharingModule.shareAsync ?? sharingModule.default?.shareAsync;
+                const canShare = typeof isAvailableAsync === 'function' ? await isAvailableAsync() : false;
+
+                if (canShare && typeof shareAsync === 'function') {
+                    await shareAsync(uri, {
+                        mimeType: 'application/pdf',
+                        dialogTitle: 'Ekstre PDF paylaş',
+                    });
+                    return;
+                }
             }
+
+            const message = Platform.OS === 'web'
+                ? 'PDF oluşturuldu, tarayıcı indirmeleri kontrol edebilirsiniz.'
+                : `PDF oluşturuldu: ${uri}`;
+            Alert.alert('PDF Hazır', message);
         } catch (error) {
             console.log('PDF export failed', error);
             const reason = error instanceof Error ? error.message : String(error);
@@ -648,14 +650,16 @@ export default function ReportsScreen() {
                         style={[
                             styles.exportButton,
                             {
-                                backgroundColor: isExporting ? theme.border : theme.primary,
+                                backgroundColor: isExporting || !hasNativePrintModule ? theme.border : theme.primary,
                             },
                         ]}
                         onPress={handleExportPdf}
-                        disabled={isExporting}
+                        disabled={isExporting || !hasNativePrintModule}
                     >
                         <Download size={14} color="#FFF" />
-                        <Text style={styles.exportButtonText}>{isExporting ? 'Hazırlanıyor' : 'PDF'}</Text>
+                        <Text style={styles.exportButtonText}>
+                            {!hasNativePrintModule ? 'PDF Yok' : isExporting ? 'Hazırlanıyor' : 'PDF'}
+                        </Text>
                     </TouchableOpacity>
                 </View>
             </View>
