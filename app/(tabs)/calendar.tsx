@@ -1,12 +1,13 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, useColorScheme, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { useFinanceStore } from '../../src/store/useFinanceStore';
-import { Colors, Spacing, Radius } from '../../src/theme';
+import { Spacing, Radius } from '../../src/theme';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
 import { format, isSameDay, parseISO } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { CreditCard, Banknote, Plus, Bell, Trash2 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
+import { useAppTheme } from '../../src/theme/useAppTheme';
 
 // Configure Turkish locale for Calendar
 LocaleConfig.locales['tr'] = {
@@ -21,9 +22,17 @@ LocaleConfig.defaultLocale = 'tr';
 export default function CalendarScreen() {
     const router = useRouter();
     const { transactions, reminders, deleteReminder } = useFinanceStore();
-    const colorScheme = useColorScheme() ?? 'light';
-    const theme = Colors[colorScheme];
+    const { theme, colorScheme } = useAppTheme();
     const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+
+    const iconBackgrounds = useMemo(
+        () => ({
+            card: colorScheme === 'dark' ? 'rgba(77,139,255,0.2)' : '#E3F2FD',
+            cash: colorScheme === 'dark' ? 'rgba(75,181,67,0.2)' : '#E8F5E9',
+            reminder: colorScheme === 'dark' ? 'rgba(251,140,0,0.22)' : '#FFF3E0',
+        }),
+        [colorScheme]
+    );
 
     const markedDates = useMemo(() => {
         const marks: any = {};
@@ -87,6 +96,7 @@ export default function CalendarScreen() {
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
             <Calendar
+                style={[styles.calendar, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}
                 onDayPress={(day: any) => setSelectedDate(day.dateString)}
                 markedDates={markedDates}
                 theme={{
@@ -125,10 +135,10 @@ export default function CalendarScreen() {
                 data={dayItems}
                 keyExtractor={(item: any) => item.id}
                 renderItem={({ item }: { item: any }) => (
-                    <View style={[styles.transactionItem, { backgroundColor: theme.surface }]}>
+                    <View style={[styles.transactionItem, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                         {item.itemType === 'transaction' ? (
                             <>
-                                <View style={[styles.iconBox, { backgroundColor: item.method === 'card' ? '#E3F2FD' : '#E8F5E9' }]}>
+                                <View style={[styles.iconBox, { backgroundColor: item.method === 'card' ? iconBackgrounds.card : iconBackgrounds.cash }]}>
                                     {item.method === 'card' ? <CreditCard size={20} color="#1E88E5" /> : <Banknote size={20} color="#43A047" />}
                                 </View>
                                 <View style={styles.transactionInfo}>
@@ -144,7 +154,7 @@ export default function CalendarScreen() {
                             </>
                         ) : (
                             <>
-                                <View style={[styles.iconBox, { backgroundColor: '#FFF3E0' }]}>
+                                <View style={[styles.iconBox, { backgroundColor: iconBackgrounds.reminder }]}>
                                     <Bell size={20} color="#FB8C00" />
                                 </View>
                                 <View style={styles.transactionInfo}>
@@ -172,6 +182,9 @@ export default function CalendarScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+    },
+    calendar: {
+        borderBottomWidth: 1,
     },
     listHeader: {
         flexDirection: 'row',
@@ -201,6 +214,7 @@ const styles = StyleSheet.create({
         padding: Spacing.md,
         marginBottom: Spacing.sm,
         borderRadius: Radius.md,
+        borderWidth: 1,
     },
     iconBox: {
         width: 40,

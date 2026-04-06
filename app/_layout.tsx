@@ -3,8 +3,7 @@ import { useEffect, useState } from 'react';
 import { useAuthStore } from '../src/store/useAuthStore';
 import { useRouter, useSegments, useRootNavigationState } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useColorScheme } from 'react-native';
-import { Colors } from '../src/theme';
+import { useAppTheme } from '../src/theme/useAppTheme';
 import { setupNotifications } from '../src/utils/notifications';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
@@ -13,7 +12,7 @@ export default function RootLayout() {
     const segments = useSegments();
     const router = useRouter();
     const navigationState = useRootNavigationState();
-    const colorScheme = useColorScheme() ?? 'light';
+    const { colorScheme, theme } = useAppTheme();
     const [isReady, setIsReady] = useState(false);
 
     useEffect(() => {
@@ -38,7 +37,7 @@ export default function RootLayout() {
             <Stack
                 screenOptions={{
                     headerShown: false,
-                    contentStyle: { backgroundColor: Colors[colorScheme].background },
+                    contentStyle: { backgroundColor: theme.background },
                 }}
             >
                 <Stack.Screen name="index" options={{ headerShown: false }} />
@@ -50,9 +49,9 @@ export default function RootLayout() {
                         presentation: 'modal',
                         headerShown: true,
                         title: 'Yeni İşlem',
-                        headerStyle: { backgroundColor: Colors[colorScheme].surface },
-                        headerTitleStyle: { color: Colors[colorScheme].text },
-                        headerTintColor: Colors[colorScheme].primary,
+                        headerStyle: { backgroundColor: theme.surface },
+                        headerTitleStyle: { color: theme.text },
+                        headerTintColor: theme.primary,
                     }}
                 />
             </Stack>

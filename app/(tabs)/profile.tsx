@@ -1,21 +1,22 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, useColorScheme, Alert, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFinanceStore } from '../../src/store/useFinanceStore';
 import { useAuthStore } from '../../src/store/useAuthStore';
-import { Colors, Spacing, Radius } from '../../src/theme';
-import { Settings, Lock, Trash2, Trophy, RotateCcw, X } from 'lucide-react-native';
+import { Spacing, Radius } from '../../src/theme';
+import { Settings, Lock, Trash2, Trophy, RotateCcw, X, LogOut, Palette } from 'lucide-react-native';
 import { Link } from 'expo-router';
-import { format } from 'date-fns';
-import { tr } from 'date-fns/locale';
+import { useAppTheme } from '../../src/theme/useAppTheme';
 
 export default function ProfileScreen() {
     const { transactions, resetData } = useFinanceStore();
-    const { password: userPassword } = useAuthStore();
-    const colorScheme = useColorScheme() ?? 'light';
-    const theme = Colors[colorScheme];
+    const { password: userPassword, logout, setPassword } = useAuthStore();
+    const { theme } = useAppTheme();
 
-    const [isModalVisible, setIsModalVisible] = useState(false);
+    const [isResetModalVisible, setIsResetModalVisible] = useState(false);
+    const [isPasswordModalVisible, setIsPasswordModalVisible] = useState(false);
     const [passwordInput, setPasswordInput] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
 
     const totalIncome = transactions.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
     const totalExpense = transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
@@ -25,12 +26,12 @@ export default function ProfileScreen() {
     };
 
     const handleReset = () => {
-        setIsModalVisible(true);
+        setIsResetModalVisible(true);
     };
 
     const handleConfirmReset = () => {
         if (passwordInput === userPassword) {
-            setIsModalVisible(false);
+            setIsResetModalVisible(false);
             setPasswordInput('');
             resetData();
             Alert.alert('Başarılı', 'Tüm veriler temizlendi.');
@@ -39,13 +40,39 @@ export default function ProfileScreen() {
         }
     };
 
+    const handleOpenPasswordModal = () => {
+        setIsPasswordModalVisible(true);
+    };
+
+    const handleClosePasswordModal = () => {
+        setIsPasswordModalVisible(false);
+        setNewPassword('');
+        setConfirmPassword('');
+    };
+
+    const handleConfirmPasswordChange = () => {
+        if (newPassword.length < 4) {
+            Alert.alert('Hata', 'Yeni şifre en az 4 haneli olmalıdır.');
+            return;
+        }
+
+        if (newPassword !== confirmPassword) {
+            Alert.alert('Hata', 'Yeni şifreler eşleşmiyor.');
+            return;
+        }
+
+        setPassword(newPassword);
+        handleClosePasswordModal();
+        Alert.alert('Başarılı', 'Şifreniz güncellendi.');
+    };
+
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
             <Modal
-                visible={isModalVisible}
+                visible={isResetModalVisible}
                 animationType="fade"
                 transparent={true}
-                onRequestClose={() => setIsModalVisible(false)}
+                onRequestClose={() => setIsResetModalVisible(false)}
             >
                 <KeyboardAvoidingView
                     behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -54,7 +81,7 @@ export default function ProfileScreen() {
                     <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
                         <View style={styles.modalHeader}>
                             <Text style={[styles.modalTitle, { color: theme.text }]}>Şifre Onayı</Text>
-                            <TouchableOpacity onPress={() => { setIsModalVisible(false); setPasswordInput(''); }}>
+                            <TouchableOpacity onPress={() => { setIsResetModalVisible(false); setPasswordInput(''); }}>
                                 <X size={24} color={theme.textSecondary} />
                             </TouchableOpacity>
                         </View>
@@ -79,6 +106,58 @@ export default function ProfileScreen() {
                             onPress={handleConfirmReset}
                         >
                             <Text style={styles.confirmBtnText}>Sıfırlamayı Onayla</Text>
+                        </TouchableOpacity>
+                    </View>
+                </KeyboardAvoidingView>
+            </Modal>
+
+            <Modal
+                visible={isPasswordModalVisible}
+                animationType="fade"
+                transparent={true}
+                onRequestClose={handleClosePasswordModal}
+            >
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={styles.modalOverlay}
+                >
+                    <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
+                        <View style={styles.modalHeader}>
+                            <Text style={[styles.modalTitle, { color: theme.text }]}>Şifre Güncelle</Text>
+                            <TouchableOpacity onPress={handleClosePasswordModal}>
+                                <X size={24} color={theme.textSecondary} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <Text style={[styles.modalDescription, { color: theme.textSecondary }]}>Yeni şifrenizi girin ve tekrar ederek doğrulayın.</Text>
+
+                        <TextInput
+                            style={[styles.modalInput, styles.modalInputCompact, { color: theme.text, borderBottomColor: theme.primary }]}
+                            placeholder="Yeni şifre"
+                            placeholderTextColor={theme.textSecondary}
+                            secureTextEntry
+                            keyboardType="number-pad"
+                            value={newPassword}
+                            onChangeText={setNewPassword}
+                            maxLength={8}
+                        />
+
+                        <TextInput
+                            style={[styles.modalInput, { color: theme.text, borderBottomColor: theme.primary }]}
+                            placeholder="Yeni şifre (tekrar)"
+                            placeholderTextColor={theme.textSecondary}
+                            secureTextEntry
+                            keyboardType="number-pad"
+                            value={confirmPassword}
+                            onChangeText={setConfirmPassword}
+                            maxLength={8}
+                        />
+
+                        <TouchableOpacity
+                            style={[styles.confirmBtn, { backgroundColor: theme.primary }]}
+                            onPress={handleConfirmPasswordChange}
+                        >
+                            <Text style={styles.confirmBtnText}>Şifreyi Kaydet</Text>
                         </TouchableOpacity>
                     </View>
                 </KeyboardAvoidingView>
@@ -118,12 +197,20 @@ export default function ProfileScreen() {
                             <Text style={[styles.settingsItemText, { color: theme.text }]}>Hızlı Notları Düzenle</Text>
                         </TouchableOpacity>
                     </Link>
-                    <Link href="/settings/security" asChild>
+                    <TouchableOpacity style={styles.settingsItem} onPress={handleOpenPasswordModal}>
+                        <Lock size={20} color={theme.success} />
+                        <Text style={[styles.settingsItemText, { color: theme.text }]}>Şifre Güncelle</Text>
+                    </TouchableOpacity>
+                    <Link href="/settings/theme" asChild>
                         <TouchableOpacity style={styles.settingsItem}>
-                            <Lock size={20} color={theme.success} />
-                            <Text style={[styles.settingsItemText, { color: theme.text }]}>Şifre Güncelle</Text>
+                            <Palette size={20} color={theme.primary} />
+                            <Text style={[styles.settingsItemText, { color: theme.text }]}>Tema Ayarları</Text>
                         </TouchableOpacity>
                     </Link>
+                    <TouchableOpacity style={styles.settingsItem} onPress={logout}>
+                        <LogOut size={20} color={theme.danger} />
+                        <Text style={[styles.settingsItemText, { color: theme.danger }]}>Çıkış Yap</Text>
+                    </TouchableOpacity>
                     <TouchableOpacity style={[styles.settingsItem, { borderBottomWidth: 0 }]} onPress={handleReset}>
                         <RotateCcw size={20} color={theme.danger} />
                         <Text style={[styles.settingsItemText, { color: theme.danger }]}>Tüm Verileri Sıfırla</Text>
@@ -253,6 +340,9 @@ const styles = StyleSheet.create({
         fontSize: 18,
         textAlign: 'center',
         marginBottom: Spacing.xl,
+    },
+    modalInputCompact: {
+        marginBottom: Spacing.md,
     },
     confirmBtn: {
         height: 50,

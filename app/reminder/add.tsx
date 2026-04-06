@@ -1,18 +1,18 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, useColorScheme, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
 import { useFinanceStore } from '../../src/store/useFinanceStore';
-import { Colors, Spacing, Radius } from '../../src/theme';
+import { Spacing, Radius } from '../../src/theme';
 import { Bell, Check, ArrowLeft } from 'lucide-react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { format, parseISO } from 'date-fns';
 import { tr } from 'date-fns/locale';
+import { useAppTheme } from '../../src/theme/useAppTheme';
 
 export default function AddReminderScreen() {
     const router = useRouter();
     const params = useLocalSearchParams<{ date: string }>();
     const { addReminder } = useFinanceStore();
-    const colorScheme = useColorScheme() ?? 'light';
-    const theme = Colors[colorScheme];
+    const { theme } = useAppTheme();
 
     const [note, setNote] = useState('');
 

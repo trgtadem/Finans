@@ -1,11 +1,9 @@
 import { Tabs } from 'expo-router';
-import { useColorScheme } from 'react-native';
-import { Colors } from '../../src/theme';
+import { useAppTheme } from '../../src/theme/useAppTheme';
 import { Home, History, Calendar, User } from 'lucide-react-native';
 
 export default function TabLayout() {
-    const colorScheme = useColorScheme() ?? 'light';
-    const theme = Colors[colorScheme];
+    const { theme } = useAppTheme();
 
     return (
         <Tabs

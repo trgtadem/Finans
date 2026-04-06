@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, useColorScheme, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { useAuthStore } from '../../src/store/useAuthStore';
-import { Colors, Spacing, Radius } from '../../src/theme';
+import { Spacing, Radius } from '../../src/theme';
 import { Lock, ArrowRight } from 'lucide-react-native';
+import { useAppTheme } from '../../src/theme/useAppTheme';
 
 export default function LoginScreen() {
     const [input, setInput] = useState('');
     const { login, setPassword, password } = useAuthStore();
-    const colorScheme = useColorScheme() ?? 'light';
-    const theme = Colors[colorScheme];
+    const { theme } = useAppTheme();
 
     const handlePress = () => {
         if (!password) {

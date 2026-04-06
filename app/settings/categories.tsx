@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, useColorScheme, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Alert } from 'react-native';
 import { useFinanceStore, TransactionType } from '../../src/store/useFinanceStore';
-import { Colors, Spacing, Radius } from '../../src/theme';
+import { Spacing, Radius } from '../../src/theme';
 import { Plus, Trash2, ArrowLeft } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
+import { useAppTheme } from '../../src/theme/useAppTheme';
 
 export default function CategoriesScreen() {
     const router = useRouter();
     const { incomeCategories, expenseCategories, addCategory, deleteCategory } = useFinanceStore();
-    const colorScheme = useColorScheme() ?? 'light';
-    const theme = Colors[colorScheme];
+    const { theme } = useAppTheme();
 
     const [activeTab, setActiveTab] = useState<TransactionType>('expense');
     const [newCategory, setNewCategory] = useState('');

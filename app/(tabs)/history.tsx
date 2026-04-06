@@ -1,15 +1,15 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, useColorScheme, TextInput } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput } from 'react-native';
 import { useFinanceStore, TransactionType, PaymentMethod } from '../../src/store/useFinanceStore';
-import { Colors, Spacing, Radius } from '../../src/theme';
+import { Spacing, Radius } from '../../src/theme';
 import { CreditCard, Banknote, Search, Filter, Trash2 } from 'lucide-react-native';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
+import { useAppTheme } from '../../src/theme/useAppTheme';
 
 export default function HistoryScreen() {
     const { transactions, deleteTransaction } = useFinanceStore();
-    const colorScheme = useColorScheme() ?? 'light';
-    const theme = Colors[colorScheme];
+    const { theme } = useAppTheme();
 
     const [search, setSearch] = useState('');
     const [filterType, setFilterType] = useState<TransactionType | 'all'>('all');

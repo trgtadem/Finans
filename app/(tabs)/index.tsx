@@ -1,16 +1,16 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, useColorScheme } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useFinanceStore } from '../../src/store/useFinanceStore';
-import { Colors, Spacing, Radius } from '../../src/theme';
+import { Spacing, Radius } from '../../src/theme';
 import { Plus, Minus, CreditCard, Banknote, History as HistoryIcon } from 'lucide-react-native';
 import { Link } from 'expo-router';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
+import { useAppTheme } from '../../src/theme/useAppTheme';
 
 export default function HomeScreen() {
     const { getTotalBalance, transactions } = useFinanceStore();
-    const colorScheme = useColorScheme() ?? 'light';
-    const theme = Colors[colorScheme];
+    const { theme } = useAppTheme();
     const totalBalance = getTotalBalance();
     const recentTransactions = transactions.slice(0, 5);
 

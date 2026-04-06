@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, useColorScheme, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFinanceStore, TransactionType, PaymentMethod } from '../../src/store/useFinanceStore';
-import { Colors, Spacing, Radius } from '../../src/theme';
+import { Spacing, Radius } from '../../src/theme';
 import { CreditCard, Banknote, Check } from 'lucide-react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useAppTheme } from '../../src/theme/useAppTheme';
 
 export default function AddTransactionScreen() {
     const router = useRouter();
     const params = useLocalSearchParams<{ date?: string }>();
     const { addTransaction, incomeCategories, expenseCategories } = useFinanceStore();
-    const colorScheme = useColorScheme() ?? 'light';
-    const theme = Colors[colorScheme];
+    const { theme } = useAppTheme();
 
     const [type, setType] = useState<TransactionType | null>(null);
     const [method, setMethod] = useState<PaymentMethod>('cash');
