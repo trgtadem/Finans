@@ -1,77 +1,287 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+    View,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    StyleSheet,
+    KeyboardAvoidingView,
+    Platform,
+    ActivityIndicator,
+    ScrollView,
+} from 'react-native';
 import { useAuthStore } from '../../src/store/useAuthStore';
 import { Spacing, Radius } from '../../src/theme';
-import { Lock, ArrowRight } from 'lucide-react-native';
+import { Lock, ArrowRight, Mail } from 'lucide-react-native';
 import { useAppTheme } from '../../src/theme/useAppTheme';
+import { isFirebaseConfigured } from '../../src/config/firebase';
+import {
+    sanitizePinInput,
+    pinValidationMessage,
+    PIN_LENGTH,
+} from '../../src/utils/pinAuth';
+import { feedback } from '../../src/components/feedback';
 
 export default function LoginScreen() {
-    const [input, setInput] = useState('');
-    const { login, setPassword, password } = useAuthStore();
+    const [email, setEmail] = useState('');
+    const [pin, setPin] = useState('');
+    const [confirmPin, setConfirmPin] = useState('');
+    const [localPin, setLocalPin] = useState('');
+    const [localConfirmPin, setLocalConfirmPin] = useState('');
+    const [isRegisterMode, setIsRegisterMode] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const {
+        login,
+        setPassword,
+        hasLocalPinSetup,
+        checkLocalPinSetup,
+        loginWithEmail,
+        registerWithEmail,
+        sendPasswordReset,
+        clearAuthError,
+    } = useAuthStore();
     const { theme } = useAppTheme();
 
-    const handlePress = () => {
-        if (!password) {
-            // First time setup
-            if (input.length >= 4) {
-                setPassword(input);
-            }
-        } else {
-            if (!login(input)) {
-                alert('Hatalı şifre!');
-            }
+    const useFirebase = isFirebaseConfigured();
+
+    useEffect(() => {
+        if (!useFirebase) {
+            checkLocalPinSetup();
+        }
+    }, [useFirebase, checkLocalPinSetup]);
+
+    const handleFirebaseSubmit = async () => {
+        if (!email.trim()) {
+            feedback.error('E-posta adresinizi girin.');
+            return;
+        }
+
+        const pinError = pinValidationMessage(pin);
+        if (pinError) {
+            feedback.error(pinError);
+            return;
+        }
+
+        if (isRegisterMode && pin !== confirmPin) {
+            feedback.error('Şifreler eşleşmiyor. Lütfen tekrar kontrol edin.');
+            return;
+        }
+
+        setIsSubmitting(true);
+        clearAuthError();
+
+        const success = isRegisterMode
+            ? await registerWithEmail(email, pin)
+            : await loginWithEmail(email, pin);
+
+        setIsSubmitting(false);
+
+        if (!success) {
+            const message = useAuthStore.getState().authError;
+            if (message) feedback.error(message);
+        } else if (isRegisterMode) {
+            feedback.success('Hesabınız oluşturuldu!');
         }
     };
+
+    const handleLocalSubmit = async () => {
+        const pinError = pinValidationMessage(localPin);
+        if (pinError) {
+            feedback.error(pinError);
+            return;
+        }
+
+        if (!hasLocalPinSetup) {
+            if (localPin !== localConfirmPin) {
+                feedback.error('Şifreler eşleşmiyor.');
+                return;
+            }
+            await setPassword(localPin);
+            feedback.success('Şifreniz kaydedildi.');
+            return;
+        }
+
+        const ok = await login(localPin);
+        if (!ok) {
+            feedback.error('Hatalı şifre!');
+        }
+    };
+
+    const handleForgotPassword = async () => {
+        if (!email.trim()) {
+            feedback.info('Şifre sıfırlama için önce e-posta adresinizi girin.');
+            return;
+        }
+        try {
+            await sendPasswordReset(email);
+            feedback.success('Şifre sıfırlama bağlantısı e-postanıza gönderildi.');
+        } catch {
+            const message = useAuthStore.getState().authError;
+            if (message) feedback.error(message);
+        }
+    };
+
+    const switchMode = () => {
+        clearAuthError();
+        setPin('');
+        setConfirmPin('');
+        setIsRegisterMode(!isRegisterMode);
+    };
+
+    const renderPinInput = (
+        value: string,
+        onChange: (v: string) => void,
+        placeholder: string,
+        withSubmit = false
+    ) => (
+        <View
+            style={[
+                styles.inputContainer,
+                { backgroundColor: theme.surface, borderColor: theme.border, marginTop: Spacing.md },
+            ]}
+        >
+            <TextInput
+                style={[styles.input, styles.pinInput, { color: theme.text }]}
+                placeholder={placeholder}
+                placeholderTextColor={theme.textSecondary}
+                secureTextEntry
+                keyboardType="number-pad"
+                maxLength={PIN_LENGTH}
+                value={value}
+                onChangeText={(t) => onChange(sanitizePinInput(t))}
+            />
+            {withSubmit && (
+                <TouchableOpacity
+                    style={[styles.submitButton, { backgroundColor: theme.primary, opacity: isSubmitting ? 0.6 : 1 }]}
+                    onPress={handleFirebaseSubmit}
+                    disabled={isSubmitting}
+                >
+                    {isSubmitting ? (
+                        <ActivityIndicator color="#FFF" />
+                    ) : (
+                        <ArrowRight size={24} color="#FFF" />
+                    )}
+                </TouchableOpacity>
+            )}
+        </View>
+    );
+
+    if (useFirebase) {
+        return (
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={[styles.container, { backgroundColor: theme.background }]}
+            >
+                <ScrollView
+                    contentContainerStyle={styles.scrollContent}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    <View style={[styles.iconContainer, { backgroundColor: theme.surface }]}>
+                        <Mail size={40} color={theme.primary} />
+                    </View>
+
+                    <Text style={[styles.title, { color: theme.text }]}>
+                        {isRegisterMode ? 'Hesap Oluştur' : 'Giriş Yap'}
+                    </Text>
+                    <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
+                        {isRegisterMode
+                            ? 'E-posta ve 6 haneli şifrenizle kayıt olun.'
+                            : 'E-posta ve 6 haneli şifrenizle giriş yapın.'}
+                    </Text>
+
+                    <View style={[styles.inputContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                        <TextInput
+                            style={[styles.input, styles.inputNormal, { color: theme.text }]}
+                            placeholder="E-posta"
+                            placeholderTextColor={theme.textSecondary}
+                            autoCapitalize="none"
+                            keyboardType="email-address"
+                            value={email}
+                            onChangeText={setEmail}
+                        />
+                    </View>
+
+                    {renderPinInput(pin, setPin, '6 haneli şifre', !isRegisterMode)}
+
+                    {isRegisterMode && renderPinInput(confirmPin, setConfirmPin, 'Şifre tekrar')}
+
+                    {isRegisterMode && (
+                        <TouchableOpacity
+                            style={[styles.mainButton, { backgroundColor: theme.primary, opacity: isSubmitting ? 0.6 : 1 }]}
+                            onPress={handleFirebaseSubmit}
+                            disabled={isSubmitting}
+                        >
+                            {isSubmitting ? (
+                                <ActivityIndicator color="#FFF" />
+                            ) : (
+                                <Text style={styles.mainButtonText}>Kayıt Ol</Text>
+                            )}
+                        </TouchableOpacity>
+                    )}
+
+                    <TouchableOpacity style={styles.linkButton} onPress={switchMode}>
+                        <Text style={[styles.linkText, { color: theme.primary }]}>
+                            {isRegisterMode
+                                ? 'Zaten hesabınız var mı? Giriş yapın'
+                                : 'Hesabınız yok mu? Kayıt olun'}
+                        </Text>
+                    </TouchableOpacity>
+
+                    {!isRegisterMode && (
+                        <TouchableOpacity style={styles.linkButton} onPress={handleForgotPassword}>
+                            <Text style={[styles.linkText, { color: theme.textSecondary }]}>
+                                Şifremi unuttum
+                            </Text>
+                        </TouchableOpacity>
+                    )}
+                </ScrollView>
+            </KeyboardAvoidingView>
+        );
+    }
+
+    const isLocalSetup = !hasLocalPinSetup;
 
     return (
         <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={[styles.container, { backgroundColor: theme.background }]}
         >
-            <View style={styles.content}>
+            <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
                 <View style={[styles.iconContainer, { backgroundColor: theme.surface }]}>
                     <Lock size={40} color={theme.primary} />
                 </View>
 
                 <Text style={[styles.title, { color: theme.text }]}>
-                    {!password ? 'Şifre Belirleyin' : 'Hoş Geldiniz'}
+                    {isLocalSetup ? 'Şifre Belirleyin' : 'Hoş Geldiniz'}
                 </Text>
                 <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-                    {!password
-                        ? 'Uygulamaya giriş için en az 4 haneli bir şifre belirleyin.'
-                        : 'Devam etmek için şifrenizi girin.'
-                    }
+                    {isLocalSetup
+                        ? '6 haneli bir şifre belirleyin ve tekrar girin.'
+                        : '6 haneli şifrenizle devam edin.'}
                 </Text>
 
-                <View style={[styles.inputContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                    <TextInput
-                        style={[styles.input, { color: theme.text }]}
-                        placeholder="Şifre"
-                        placeholderTextColor={theme.textSecondary}
-                        secureTextEntry
-                        keyboardType="number-pad"
-                        value={input}
-                        onChangeText={setInput}
-                        maxLength={8}
-                    />
+                {renderPinInput(localPin, setLocalPin, '6 haneli şifre', !isLocalSetup)}
+
+                {isLocalSetup && renderPinInput(localConfirmPin, setLocalConfirmPin, 'Şifre tekrar')}
+
+                {isLocalSetup && (
                     <TouchableOpacity
-                        style={[styles.submitButton, { backgroundColor: theme.primary }]}
-                        onPress={handlePress}
+                        style={[styles.mainButton, { backgroundColor: theme.primary }]}
+                        onPress={handleLocalSubmit}
                     >
-                        <ArrowRight size={24} color="#FFF" />
+                        <Text style={styles.mainButtonText}>Kaydet</Text>
                     </TouchableOpacity>
-                </View>
-            </View>
+                )}
+            </ScrollView>
         </KeyboardAvoidingView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
-    content: {
-        flex: 1,
+    container: { flex: 1 },
+    scrollContent: {
+        flexGrow: 1,
         padding: Spacing.xl,
         justifyContent: 'center',
         alignItems: 'center',
@@ -89,11 +299,7 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 8,
     },
-    title: {
-        fontSize: 28,
-        fontWeight: 'bold',
-        marginBottom: Spacing.sm,
-    },
+    title: { fontSize: 28, fontWeight: 'bold', marginBottom: Spacing.sm },
     subtitle: {
         fontSize: 16,
         textAlign: 'center',
@@ -107,13 +313,11 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         paddingLeft: Spacing.lg,
         width: '100%',
-        height: 64,
+        minHeight: 64,
     },
-    input: {
-        flex: 1,
-        fontSize: 20,
-        letterSpacing: 8,
-    },
+    input: { flex: 1, fontSize: 16 },
+    inputNormal: { fontSize: 16 },
+    pinInput: { fontSize: 22, letterSpacing: 6, textAlign: 'center' },
     submitButton: {
         width: 48,
         height: 48,
@@ -121,5 +325,16 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: Spacing.sm,
-    }
+    },
+    mainButton: {
+        width: '100%',
+        height: 52,
+        borderRadius: Radius.xl,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: Spacing.lg,
+    },
+    mainButtonText: { color: '#FFF', fontSize: 17, fontWeight: 'bold' },
+    linkButton: { marginTop: Spacing.lg, padding: Spacing.sm },
+    linkText: { fontSize: 14, fontWeight: '600' },
 });

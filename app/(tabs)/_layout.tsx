@@ -1,11 +1,15 @@
+import { View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { useAppTheme } from '../../src/theme/useAppTheme';
 import { Home, History, Calendar, User } from 'lucide-react-native';
+import { SyncStatusBanner } from '../../src/components/SyncStatusBanner';
 
 export default function TabLayout() {
     const { theme } = useAppTheme();
 
     return (
+        <View style={{ flex: 1, backgroundColor: theme.background }}>
+        <SyncStatusBanner />
         <Tabs
             screenOptions={{
                 headerShown: true,
@@ -55,5 +59,6 @@ export default function TabLayout() {
                 }}
             />
         </Tabs>
+        </View>
     );
 }

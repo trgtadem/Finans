@@ -1,35 +1,79 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
+import {
+    View,
+    Text,
+    StyleSheet,
+    TextInput,
+    TouchableOpacity,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    ActivityIndicator,
+} from 'react-native';
 import { useFinanceStore } from '../../src/store/useFinanceStore';
 import { Spacing, Radius } from '../../src/theme';
-import { Bell, Check, ArrowLeft } from 'lucide-react-native';
+import { Bell, Check, ArrowLeft, Clock } from 'lucide-react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { format, parseISO } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { useAppTheme } from '../../src/theme/useAppTheme';
+import {
+    scheduleReminderNotification,
+    DEFAULT_REMINDER_TIME,
+} from '../../src/services/notifications/reminderNotifications';
+import { feedback } from '../../src/components/feedback';
+
+const TIME_OPTIONS = ['08:00', '09:00', '12:00', '18:00', '20:00'];
 
 export default function AddReminderScreen() {
     const router = useRouter();
     const params = useLocalSearchParams<{ date: string }>();
-    const { addReminder } = useFinanceStore();
+    const { addReminder, updateReminderNotificationId } = useFinanceStore();
     const { theme } = useAppTheme();
 
     const [note, setNote] = useState('');
+    const [selectedTime, setSelectedTime] = useState(DEFAULT_REMINDER_TIME);
+    const [isSaving, setIsSaving] = useState(false);
 
     const reminderDate = params.date;
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!note.trim()) {
-            Alert.alert('Hata', 'Lütfen bir not girin.');
+            feedback.error('Lütfen bir not girin.');
             return;
         }
 
-        addReminder({
-            note: note.trim(),
-            date: reminderDate,
-        });
+        setIsSaving(true);
 
-        router.back();
+        try {
+            const reminderId = addReminder({
+                note: note.trim(),
+                date: reminderDate,
+                time: selectedTime,
+            });
+
+            const reminder = {
+                id: reminderId,
+                note: note.trim(),
+                date: reminderDate,
+                time: selectedTime,
+                notificationId: undefined as string | undefined,
+            };
+
+            const notificationId = await scheduleReminderNotification(reminder);
+            if (notificationId) {
+                updateReminderNotificationId(reminderId, notificationId);
+                reminder.notificationId = notificationId;
+            }
+
+            feedback.success('Hatırlatıcı kaydedildi.');
+            router.back();
+        } catch {
+            feedback.warning('Hatırlatıcı kaydedildi; bildirim planlanamadı. İzinleri kontrol edin.');
+            router.back();
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     return (
@@ -42,8 +86,16 @@ export default function AddReminderScreen() {
                     <ArrowLeft size={24} color={theme.text} />
                 </TouchableOpacity>
                 <Text style={[styles.headerTitle, { color: theme.text }]}>Hatırlatıcı Ekle</Text>
-                <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-                    <Check size={24} color={theme.primary} />
+                <TouchableOpacity
+                    style={styles.saveBtn}
+                    onPress={handleSave}
+                    disabled={isSaving}
+                >
+                    {isSaving ? (
+                        <ActivityIndicator color={theme.primary} />
+                    ) : (
+                        <Check size={24} color={theme.primary} />
+                    )}
                 </TouchableOpacity>
             </View>
 
@@ -74,11 +126,57 @@ export default function AddReminderScreen() {
                     </Text>
                 </View>
 
+                <View style={styles.inputGroup}>
+                    <View style={styles.timeLabelRow}>
+                        <Clock size={16} color={theme.textSecondary} />
+                        <Text style={[styles.label, { color: theme.textSecondary, marginBottom: 0 }]}>
+                            Bildirim Saati
+                        </Text>
+                    </View>
+                    <View style={styles.timeOptions}>
+                        {TIME_OPTIONS.map((time) => (
+                            <TouchableOpacity
+                                key={time}
+                                style={[
+                                    styles.timeChip,
+                                    {
+                                        backgroundColor:
+                                            selectedTime === time
+                                                ? theme.primary
+                                                : theme.surface,
+                                    },
+                                ]}
+                                onPress={() => setSelectedTime(time)}
+                            >
+                                <Text
+                                    style={[
+                                        styles.timeChipText,
+                                        {
+                                            color:
+                                                selectedTime === time
+                                                    ? '#FFF'
+                                                    : theme.text,
+                                        },
+                                    ]}
+                                >
+                                    {time}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </View>
+
                 <TouchableOpacity
-                    style={[styles.mainButton, { backgroundColor: theme.primary }]}
+                    style={[
+                        styles.mainButton,
+                        { backgroundColor: theme.primary, opacity: isSaving ? 0.6 : 1 },
+                    ]}
                     onPress={handleSave}
+                    disabled={isSaving}
                 >
-                    <Text style={styles.mainButtonText}>Kaydet</Text>
+                    <Text style={styles.mainButtonText}>
+                        {isSaving ? 'Kaydediliyor...' : 'Kaydet ve Bildirim Kur'}
+                    </Text>
                 </TouchableOpacity>
             </ScrollView>
         </KeyboardAvoidingView>
@@ -107,6 +205,8 @@ const styles = StyleSheet.create({
     },
     saveBtn: {
         padding: 4,
+        minWidth: 32,
+        alignItems: 'center',
     },
     scrollContent: {
         padding: Spacing.lg,
@@ -128,6 +228,26 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         marginBottom: Spacing.sm,
         marginLeft: 4,
+    },
+    timeLabelRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.sm,
+        marginBottom: Spacing.sm,
+    },
+    timeOptions: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: Spacing.sm,
+    },
+    timeChip: {
+        paddingHorizontal: Spacing.md,
+        paddingVertical: Spacing.sm,
+        borderRadius: Radius.lg,
+    },
+    timeChipText: {
+        fontSize: 14,
+        fontWeight: '600',
     },
     inputWrapper: {
         borderRadius: Radius.lg,

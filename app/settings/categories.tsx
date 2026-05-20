@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput } from 'react-native';
 import { useFinanceStore, TransactionType } from '../../src/store/useFinanceStore';
 import { Spacing, Radius } from '../../src/theme';
 import { Plus, Trash2, ArrowLeft } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useAppTheme } from '../../src/theme/useAppTheme';
+import { feedback } from '../../src/components/feedback';
 
 export default function CategoriesScreen() {
     const router = useRouter();
@@ -19,22 +20,26 @@ export default function CategoriesScreen() {
     const handleAdd = () => {
         if (!newCategory.trim()) return;
         if (categories.includes(newCategory.trim())) {
-            Alert.alert('Hata', 'Bu kategori zaten mevcut.');
+            feedback.warning('Bu kategori zaten mevcut.');
             return;
         }
         addCategory(activeTab, newCategory.trim());
         setNewCategory('');
+        feedback.success('Kategori eklendi.');
     };
 
     const handleDelete = (name: string) => {
-        Alert.alert(
-            'Kategoriyi Sil',
-            `"${name}" kategorisini silmek istediğinize emin misiniz?`,
-            [
-                { text: 'Vazgeç', style: 'cancel' },
-                { text: 'Sil', style: 'destructive', onPress: () => deleteCategory(activeTab, name) }
-            ]
-        );
+        feedback.confirm({
+            title: 'Kategoriyi Sil',
+            message: `"${name}" kategorisini silmek istediğinize emin misiniz?`,
+            confirmText: 'Sil',
+            cancelText: 'Vazgeç',
+            destructive: true,
+            onConfirm: () => {
+                deleteCategory(activeTab, name);
+                feedback.success('Kategori silindi.');
+            },
+        });
     };
 
     return (

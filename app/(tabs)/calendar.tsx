@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { useFinanceStore } from '../../src/store/useFinanceStore';
+import { cancelReminderNotification } from '../../src/services/notifications/reminderNotifications';
 import { Spacing, Radius } from '../../src/theme';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
 import { format, isSameDay, parseISO } from 'date-fns';
@@ -77,6 +78,13 @@ export default function CalendarScreen() {
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(amount);
+    };
+
+    const handleDeleteReminder = async (id: string) => {
+        const removed = deleteReminder(id);
+        if (removed?.notificationId) {
+            await cancelReminderNotification(removed.notificationId);
+        }
     };
 
     const isStrictFuture = useMemo(() => {
@@ -159,9 +167,12 @@ export default function CalendarScreen() {
                                 </View>
                                 <View style={styles.transactionInfo}>
                                     <Text style={[styles.itemCategory, { color: theme.text }]}>Hatırlatıcı</Text>
-                                    <Text style={[styles.itemNote, { color: theme.textSecondary }]}>{item.note}</Text>
+                                    <Text style={[styles.itemNote, { color: theme.textSecondary }]}>
+                                        {item.note}
+                                        {item.time ? ` · ${item.time}` : ''}
+                                    </Text>
                                 </View>
-                                <TouchableOpacity onPress={() => deleteReminder(item.id)}>
+                                <TouchableOpacity onPress={() => handleDeleteReminder(item.id)}>
                                     <Trash2 size={20} color={theme.danger} />
                                 </TouchableOpacity>
                             </>

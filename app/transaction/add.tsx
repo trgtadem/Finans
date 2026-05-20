@@ -5,6 +5,7 @@ import { Spacing, Radius } from '../../src/theme';
 import { CreditCard, Banknote, Check } from 'lucide-react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAppTheme } from '../../src/theme/useAppTheme';
+import { feedback } from '../../src/components/feedback';
 
 export default function AddTransactionScreen() {
     const router = useRouter();
@@ -41,18 +42,18 @@ export default function AddTransactionScreen() {
 
     const handleSave = () => {
         if (!type) {
-            alert('Lütfen işlem türünü (Gelir/Gider) seçin.');
+            feedback.warning('Lütfen işlem türünü (Gelir/Gider) seçin.');
             return;
         }
 
         if (!amount || isNaN(parseFloat(amount))) {
-            alert('Lütfen geçerli bir tutar girin.');
+            feedback.warning('Lütfen geçerli bir tutar girin.');
             return;
         }
 
         const numericAmount = parseFloat(amount);
         if (numericAmount > 9999999999) {
-            alert('Tutar çok yüksek. Lütfen daha küçük bir değer girin.');
+            feedback.warning('Tutar çok yüksek. Lütfen daha küçük bir değer girin.');
             return;
         }
 

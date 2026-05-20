@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
     ArrowLeft,
@@ -17,6 +17,8 @@ import { requireOptionalNativeModule } from 'expo-modules-core';
 import { useFinanceStore, Transaction } from '../../src/store/useFinanceStore';
 import { Spacing, Radius } from '../../src/theme';
 import { useAppTheme } from '../../src/theme/useAppTheme';
+import { feedback } from '../../src/components/feedback';
+import { logger } from '../../src/utils/logger';
 
 type RangeKey = 'all' | '30d' | '90d' | 'month';
 type StatementRow = Transaction & { balanceAfter: number };
@@ -387,13 +389,12 @@ export default function ReportsScreen() {
 
     const handleExportPdf = async () => {
         if (statementRows.length === 0) {
-            Alert.alert('Bilgi', 'PDF oluşturmak için seçili dönemde en az bir işlem olmalıdır.');
+            feedback.info('PDF oluşturmak için seçili dönemde en az bir işlem olmalıdır.');
             return;
         }
 
         if (!hasNativePrintModule) {
-            Alert.alert(
-                'PDF Kullanılamıyor',
+            feedback.warning(
                 'Bu ortamda PDF modülü bulunamadı. Development build veya native build kullanın.'
             );
             return;
@@ -431,18 +432,17 @@ export default function ReportsScreen() {
             const message = Platform.OS === 'web'
                 ? 'PDF oluşturuldu, tarayıcı indirmeleri kontrol edebilirsiniz.'
                 : `PDF oluşturuldu: ${uri}`;
-            Alert.alert('PDF Hazır', message);
+            feedback.success(message);
         } catch (error) {
-            console.log('PDF export failed', error);
+            logger.reports.error('PDF export failed', error);
             const reason = error instanceof Error ? error.message : String(error);
 
             if (reason.includes('Cannot find native module') || reason.includes('PRINT_UNAVAILABLE')) {
-                Alert.alert(
-                    'PDF Kullanılamıyor',
+                feedback.warning(
                     'Bu cihazda PDF modülleri erişilebilir değil. Development build veya native build ile tekrar deneyin.'
                 );
             } else {
-                Alert.alert('Hata', 'PDF oluşturulurken bir sorun oluştu.');
+                feedback.error('PDF oluşturulurken bir sorun oluştu.');
             }
         } finally {
             setIsExporting(false);

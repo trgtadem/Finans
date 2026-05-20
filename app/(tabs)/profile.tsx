@@ -1,20 +1,39 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFinanceStore } from '../../src/store/useFinanceStore';
 import { useAuthStore } from '../../src/store/useAuthStore';
 import { Spacing, Radius } from '../../src/theme';
 import { Settings, Lock, Trash2, Trophy, RotateCcw, X, LogOut, Palette, FileText } from 'lucide-react-native';
 import { Link } from 'expo-router';
 import { useAppTheme } from '../../src/theme/useAppTheme';
+import { isFirebaseConfigured } from '../../src/config/firebase';
+import { clearUserFinance } from '../../src/services/firebase/userData';
+import {
+    sanitizePinInput,
+    pinValidationMessage,
+    PIN_LENGTH,
+} from '../../src/utils/pinAuth';
+import { feedback } from '../../src/components/feedback';
+import { verifyLocalPin } from '../../src/utils/securePin';
 
 export default function ProfileScreen() {
     const { transactions, resetData } = useFinanceStore();
-    const { password: userPassword, logout, setPassword } = useAuthStore();
+    const {
+        logout,
+        setPassword,
+        user,
+        authMode,
+        updateFirebasePassword,
+        authError,
+        clearAuthError,
+    } = useAuthStore();
     const { theme } = useAppTheme();
+    const useFirebase = isFirebaseConfigured() && authMode === 'firebase';
 
     const [isResetModalVisible, setIsResetModalVisible] = useState(false);
     const [isPasswordModalVisible, setIsPasswordModalVisible] = useState(false);
     const [passwordInput, setPasswordInput] = useState('');
+    const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
 
@@ -25,45 +44,93 @@ export default function ProfileScreen() {
         return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(amount);
     };
 
+    const displayName = user?.email?.split('@')[0] ?? 'Kullanıcı';
+    const avatarLetter = (user?.email?.[0] ?? displayName[0] ?? 'K').toUpperCase();
+
     const handleReset = () => {
         setIsResetModalVisible(true);
     };
 
-    const handleConfirmReset = () => {
-        if (passwordInput === userPassword) {
-            setIsResetModalVisible(false);
-            setPasswordInput('');
-            resetData();
-            Alert.alert('Başarılı', 'Tüm veriler temizlendi.');
-        } else {
-            Alert.alert('Hata', 'Girdiğiniz şifre yanlış.');
+    const performReset = async () => {
+        setIsResetModalVisible(false);
+        setPasswordInput('');
+        resetData();
+        try {
+            if (user?.uid) {
+                await clearUserFinance(user.uid);
+            }
+            feedback.success('Tüm veriler temizlendi.');
+        } catch {
+            feedback.error('Veriler sıfırlanırken bir hata oluştu.');
         }
     };
 
+    const handleConfirmReset = () => {
+        if (useFirebase) {
+            feedback.confirm({
+                title: 'Verileri Sıfırla',
+                message: 'Tüm işlem ve hatırlatıcı verileri silinecek. Emin misiniz?',
+                confirmText: 'Sıfırla',
+                destructive: true,
+                onConfirm: () => performReset(),
+            });
+            return;
+        }
+
+        verifyLocalPin(passwordInput).then((valid) => {
+            if (valid) {
+                performReset();
+            } else {
+                feedback.error('Girdiğiniz şifre yanlış.');
+            }
+        });
+    };
+
     const handleOpenPasswordModal = () => {
+        clearAuthError();
         setIsPasswordModalVisible(true);
     };
 
     const handleClosePasswordModal = () => {
         setIsPasswordModalVisible(false);
+        setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
+        clearAuthError();
     };
 
-    const handleConfirmPasswordChange = () => {
-        if (newPassword.length < 4) {
-            Alert.alert('Hata', 'Yeni şifre en az 4 haneli olmalıdır.');
+    const handleConfirmPasswordChange = async () => {
+        const newPinError = pinValidationMessage(newPassword);
+        if (newPinError) {
+            feedback.error(newPinError);
             return;
         }
 
         if (newPassword !== confirmPassword) {
-            Alert.alert('Hata', 'Yeni şifreler eşleşmiyor.');
+            feedback.error('Yeni şifreler eşleşmiyor.');
             return;
         }
 
-        setPassword(newPassword);
+        if (useFirebase) {
+            const currentPinError = pinValidationMessage(currentPassword);
+            if (currentPinError) {
+                feedback.error(currentPinError);
+                return;
+            }
+            try {
+                await updateFirebasePassword(currentPassword, newPassword);
+                handleClosePasswordModal();
+                feedback.success('Şifreniz güncellendi.');
+            } catch {
+                const message = useAuthStore.getState().authError;
+                if (message) feedback.error(message);
+            }
+            return;
+        }
+
+        await setPassword(newPassword);
         handleClosePasswordModal();
-        Alert.alert('Başarılı', 'Şifreniz güncellendi.');
+        feedback.success('Şifreniz güncellendi.');
     };
 
     return (
@@ -80,26 +147,33 @@ export default function ProfileScreen() {
                 >
                     <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
                         <View style={styles.modalHeader}>
-                            <Text style={[styles.modalTitle, { color: theme.text }]}>Şifre Onayı</Text>
+                            <Text style={[styles.modalTitle, { color: theme.text }]}>
+                                {useFirebase ? 'Verileri Sıfırla' : 'Şifre Onayı'}
+                            </Text>
                             <TouchableOpacity onPress={() => { setIsResetModalVisible(false); setPasswordInput(''); }}>
                                 <X size={24} color={theme.textSecondary} />
                             </TouchableOpacity>
                         </View>
 
                         <Text style={[styles.modalDescription, { color: theme.textSecondary }]}>
-                            Tüm verileri sıfırlamak için lütfen şifrenizi girin.
+                            {useFirebase
+                                ? 'Tüm işlem ve hatırlatıcı verileri silinecek.'
+                                : 'Tüm verileri sıfırlamak için lütfen şifrenizi girin.'}
                         </Text>
 
-                        <TextInput
-                            style={[styles.modalInput, { color: theme.text, borderBottomColor: theme.primary }]}
-                            placeholder="Şifreniz"
-                            placeholderTextColor={theme.textSecondary}
-                            secureTextEntry
-                            keyboardType="number-pad"
-                            autoFocus
-                            value={passwordInput}
-                            onChangeText={setPasswordInput}
-                        />
+                        {!useFirebase && (
+                            <TextInput
+                                style={[styles.modalInput, { color: theme.text, borderBottomColor: theme.primary }]}
+                                placeholder="Şifreniz"
+                                placeholderTextColor={theme.textSecondary}
+                                secureTextEntry
+                                keyboardType="number-pad"
+                                autoFocus
+                                maxLength={PIN_LENGTH}
+                                value={passwordInput}
+                                onChangeText={(t) => setPasswordInput(sanitizePinInput(t))}
+                            />
+                        )}
 
                         <TouchableOpacity
                             style={[styles.confirmBtn, { backgroundColor: theme.danger }]}
@@ -129,17 +203,32 @@ export default function ProfileScreen() {
                             </TouchableOpacity>
                         </View>
 
-                        <Text style={[styles.modalDescription, { color: theme.textSecondary }]}>Yeni şifrenizi girin ve tekrar ederek doğrulayın.</Text>
+                        <Text style={[styles.modalDescription, { color: theme.textSecondary }]}>
+                            6 haneli yeni şifrenizi girin ve tekrar ederek doğrulayın.
+                        </Text>
+
+                        {useFirebase && (
+                            <TextInput
+                                style={[styles.modalInput, styles.modalInputCompact, { color: theme.text, borderBottomColor: theme.primary }]}
+                                placeholder="Mevcut 6 haneli şifre"
+                                placeholderTextColor={theme.textSecondary}
+                                secureTextEntry
+                                keyboardType="number-pad"
+                                maxLength={PIN_LENGTH}
+                                value={currentPassword}
+                                onChangeText={(t) => setCurrentPassword(sanitizePinInput(t))}
+                            />
+                        )}
 
                         <TextInput
                             style={[styles.modalInput, styles.modalInputCompact, { color: theme.text, borderBottomColor: theme.primary }]}
-                            placeholder="Yeni şifre"
+                            placeholder="Yeni 6 haneli şifre"
                             placeholderTextColor={theme.textSecondary}
                             secureTextEntry
                             keyboardType="number-pad"
+                            maxLength={PIN_LENGTH}
                             value={newPassword}
-                            onChangeText={setNewPassword}
-                            maxLength={8}
+                            onChangeText={(t) => setNewPassword(sanitizePinInput(t))}
                         />
 
                         <TextInput
@@ -148,9 +237,9 @@ export default function ProfileScreen() {
                             placeholderTextColor={theme.textSecondary}
                             secureTextEntry
                             keyboardType="number-pad"
+                            maxLength={PIN_LENGTH}
                             value={confirmPassword}
-                            onChangeText={setConfirmPassword}
-                            maxLength={8}
+                            onChangeText={(t) => setConfirmPassword(sanitizePinInput(t))}
                         />
 
                         <TouchableOpacity
@@ -166,11 +255,13 @@ export default function ProfileScreen() {
             <View style={styles.header}>
                 <View style={styles.profileRow}>
                     <View style={[styles.avatar, { backgroundColor: theme.primary }]}>
-                        <Text style={styles.avatarText}>A</Text>
+                        <Text style={styles.avatarText}>{avatarLetter}</Text>
                     </View>
                     <View style={styles.profileInfo}>
-                        <Text style={[styles.profileName, { color: theme.text }]}>Standart Kullanıcı</Text>
-                        <Text style={[styles.profileDetails, { color: theme.textSecondary }]}>Finans Yönetimi</Text>
+                        <Text style={[styles.profileName, { color: theme.text }]}>{displayName}</Text>
+                        <Text style={[styles.profileDetails, { color: theme.textSecondary }]}>
+                            {user?.email ?? 'Finans Yönetimi'}
+                        </Text>
                     </View>
                 </View>
 
@@ -213,7 +304,10 @@ export default function ProfileScreen() {
                             <Text style={[styles.settingsItemText, { color: theme.text }]}>Raporlarım</Text>
                         </TouchableOpacity>
                     </Link>
-                    <TouchableOpacity style={styles.settingsItem} onPress={logout}>
+                    <TouchableOpacity
+                        style={styles.settingsItem}
+                        onPress={() => logout()}
+                    >
                         <LogOut size={20} color={theme.danger} />
                         <Text style={[styles.settingsItemText, { color: theme.danger }]}>Çıkış Yap</Text>
                     </TouchableOpacity>
