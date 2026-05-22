@@ -46,6 +46,8 @@ interface AuthState {
     authMode: 'local' | 'firebase';
     user: AuthUser | null;
     authError: string | null;
+    /** true → bir sonraki oturumda buluttan tek seferlik indirme (soğuk açılışta false) */
+    cloudPullRequested: boolean;
 
     initialize: () => () => void;
     checkLocalPinSetup: () => Promise<void>;
@@ -57,6 +59,7 @@ interface AuthState {
     updateFirebasePassword: (current: string, next: string) => Promise<void>;
     logout: () => Promise<void>;
     clearAuthError: () => void;
+    clearCloudPullRequested: () => void;
 }
 
 function mapFirebaseUser(user: User): AuthUser {
@@ -83,6 +86,7 @@ export const useAuthStore = create<AuthState>()(
             authMode: isFirebaseConfigured() ? 'firebase' : 'local',
             user: null,
             authError: null,
+            cloudPullRequested: false,
 
             initialize: () => {
                 if (!isAuthAvailable()) {
@@ -143,6 +147,7 @@ export const useAuthStore = create<AuthState>()(
                         isAuthenticated: true,
                         user: mapFirebaseUser(user),
                         authMode: 'firebase',
+                        cloudPullRequested: true,
                     });
                     return true;
                 } catch (error: unknown) {
@@ -168,6 +173,7 @@ export const useAuthStore = create<AuthState>()(
                         isAuthenticated: true,
                         user: mapFirebaseUser(user),
                         authMode: 'firebase',
+                        cloudPullRequested: true,
                     });
                     return true;
                 } catch (error: unknown) {
@@ -216,6 +222,7 @@ export const useAuthStore = create<AuthState>()(
             },
 
             clearAuthError: () => set({ authError: null }),
+            clearCloudPullRequested: () => set({ cloudPullRequested: false }),
         }),
         {
             name: 'auth-storage',

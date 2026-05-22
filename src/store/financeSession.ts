@@ -9,6 +9,7 @@ async function getFinanceStore() {
 export async function rehydrateFinanceStore(): Promise<void> {
     const useFinanceStore = await getFinanceStore();
     await useFinanceStore.persist.rehydrate();
+    useFinanceStore.getState().setCloudDataReady(true);
 }
 
 /** Kullanıcı oturumu: önbelleği yükle (yalnızca hesap değişiminde sıfırla). */
@@ -19,18 +20,18 @@ export async function startFinanceSession(
     setFinanceStorageUserId(uid);
     const useFinanceStore = await getFinanceStore();
     const store = useFinanceStore.getState();
-    store.setCloudDataReady(false);
     if (options?.reset) {
         store.resetData();
     }
     await useFinanceStore.persist.rehydrate();
+    store.setCloudDataReady(true);
 }
 
 export async function clearFinanceSession(): Promise<void> {
     setFinanceStorageUserId(null);
     const useFinanceStore = await getFinanceStore();
-    useFinanceStore.getState().setCloudDataReady(false);
     useFinanceStore.getState().resetData();
+    useFinanceStore.getState().setCloudDataReady(false);
     await rehydrateFinanceStore();
 }
 

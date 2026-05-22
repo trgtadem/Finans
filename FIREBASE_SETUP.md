@@ -116,34 +116,39 @@ npx expo run:android
 | App Check | `src/config/appCheck.ts` |
 | Alt koleksiyon senkronu | `src/services/firebase/financeRepository.ts` |
 
-## 8. İki cihaz + arka plan senkron testi
+## 8. Çevrimdışı öncelikli model
 
-Aşağıdaki senaryoyu **kurallar Publish edildikten sonra** iki fiziksel cihaz veya emülatör + telefon ile doğrulayın.
+| Durum | Ağ | Davranış |
+|-------|-----|----------|
+| Uygulama açılışı (oturum hatırlanıyor) | Gerekmez | `finance-storage-{uid}` önbelleğinden anında UI |
+| E-posta ile giriş | Bir kez | Önce bekleyen yedek varsa yükle, sonra `fetchUserFinanceOnce` → önbellek |
+| Oturum içi düzenleme | Gerekmez | Yalnızca yerel + `hasPendingCloudSync` |
+| Arka plan / kapanma | Varsa | `saveUserFinance` tam snapshot |
+| Manuel | İsteğe bağlı | Profil → Senkronizasyon: Buluta yükle / Buluttan indir |
+
+**Çok cihaz:** Anlık senkron yok. Cihaz B, A yedekledikten ve B tekrar giriş yaptıktan sonra güncel veriyi görür.
+
+**Uygulama silme:** Yerel önbellek silinir. Yeniden kurulum + giriş → veriler Firestore’dan bir kez indirilir.
+
+## 9. Test checklist
 
 | # | Adım | Beklenen |
 |---|------|----------|
-| 1 | Cihaz A: Firebase hesabıyla giriş, bir gider işlemi ekle | Banner kısa süre «Kaydediliyor…», sonra kaybolur |
-| 2 | Firestore Console: `users/{uid}/transactions/{id}` | Yeni doküman görünür |
-| 3 | Cihaz B: Aynı hesapla giriş (temiz kurulum veya mevcut) | İşlem geçmişte ve ana sayfada görünür |
-| 4 | Cihaz A: İşlem ekledikten hemen arka plana al (debounce öncesi) | Firestore’da kayıt yine oluşur (`useSyncLifecycle` flush) |
-| 5 | A ve B’de art arda düzenleme | Uzak veri daha yeniyse otomatik çekilir; «Diğer cihazdaki güncel veriler yüklendi» |
-| 6 | Profil → Senkronizasyon → «Şimdi senkronize et» | `lastSyncAt` güncellenir, hata yok |
-| 7 | 500+ işlem (isteğe bağlı import) | Geçmiş listesi akıcı kayar; banner sürekli açık kalmaz |
+| 1 | Giriş → işlem ekle → uçak modu | İşlem listede kalır |
+| 2 | Arka plana al (online) | Firestore’da snapshot güncellenir |
+| 3 | Soğuk açılış (oturum var, uçak modu) | Veriler önbellekten gelir, bekleme yok |
+| 4 | Çıkış → giriş (online) | Buluttan tek indirme |
+| 5 | Senkronizasyon → Buluta yükle / Buluttan indir | Manuel yedek çalışır |
 
-**Arka plan flush:** `src/hooks/useSyncLifecycle.ts` — uygulama `background` / `inactive` olunca bekleyen delta ve tam snapshot yüklenir.
-
-**Delta yazım:** Her işlem/hatırlatıcı değişikliği tek Firestore dokümanı olarak gider (`financeRepository` `upsert*` / `delete*`).
-
-## 9. Mimari özet
+## 10. Mimari özet
 
 | Özellik | Dosya |
 |---------|--------|
 | Firebase init | `src/config/firebase.ts` |
-| Auth | `src/services/firebase/auth.ts` |
-| Firestore (v2 + migrasyon + delta) | `src/services/firebase/financeRepository.ts` |
-| Delta / flush motoru | `src/services/sync/cloudSync.ts` |
-| Legacy tek belge | `src/services/firebase/userData.ts` |
-| Senkron dinleyici | `src/hooks/useFirebaseSync.ts` |
-| Arka plan flush | `src/hooks/useSyncLifecycle.ts` |
-| Performans ayarları | `src/store/useAppSettingsStore.ts` |
-| Yerel depo | `src/store/financeStorage.ts` |
+| Auth + girişte pull bayrağı | `src/store/useAuthStore.ts` (`cloudPullRequested`) |
+| Firestore okuma/yazma | `src/services/firebase/financeRepository.ts` |
+| Yedek motoru (pull/push) | `src/services/sync/cloudSync.ts` |
+| Oturum / önbellek | `src/store/financeSession.ts`, `financeStorage.ts` |
+| Giriş pull + oturum | `src/hooks/useFirebaseSync.ts` |
+| Kapanışta yükleme | `src/hooks/useSyncLifecycle.ts` |
+| Yerel state | `src/store/useFinanceStore.ts` (persist v5, `hasPendingCloudSync`) |

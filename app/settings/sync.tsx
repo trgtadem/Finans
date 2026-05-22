@@ -8,7 +8,7 @@ import {
     ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, RefreshCw, Copy, Cloud } from 'lucide-react-native';
+import { ArrowLeft, RefreshCw, Copy, Cloud, Upload, Download } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
@@ -18,7 +18,7 @@ import { useAppTheme } from '../../src/theme/useAppTheme';
 import { Spacing, Radius } from '../../src/theme';
 import { isFirebaseConfigured } from '../../src/config/firebase';
 import { FIRESTORE_SCHEMA_VERSION } from '../../src/services/firebase/financeRepository';
-import { syncNowFull } from '../../src/hooks/useFirebaseSync';
+import { syncNowUpload, syncNowPull } from '../../src/hooks/useFirebaseSync';
 import { feedback } from '../../src/components/feedback';
 import { logCatch } from '../../src/utils/logger';
 
@@ -33,20 +33,34 @@ export default function SyncSettingsScreen() {
         syncError,
         cloudUpdatedAt,
     } = useFinanceStore();
-    const [isManualSyncing, setIsManualSyncing] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
+    const [isPulling, setIsPulling] = useState(false);
 
     const firebaseReady = isFirebaseConfigured();
+    const busy = isSyncing || isUploading || isPulling;
 
-    const handleSyncNow = async () => {
+    const handleUpload = async () => {
         if (!firebaseReady || !user?.uid) return;
-        setIsManualSyncing(true);
+        setIsUploading(true);
         try {
-            await syncNowFull();
-            feedback.success('Senkron tamamlandı.');
+            await syncNowUpload();
+            feedback.success('Veriler buluta kaydedildi.');
         } catch {
-            feedback.error('Senkron başarısız.');
+            feedback.error('Buluta yükleme başarısız.');
         } finally {
-            setIsManualSyncing(false);
+            setIsUploading(false);
+        }
+    };
+
+    const handlePull = async () => {
+        if (!firebaseReady || !user?.uid) return;
+        setIsPulling(true);
+        try {
+            await syncNowPull();
+        } catch {
+            feedback.error('Buluttan indirme başarısız.');
+        } finally {
+            setIsPulling(false);
         }
     };
 
@@ -82,19 +96,22 @@ export default function SyncSettingsScreen() {
                 <View style={[styles.card, { backgroundColor: theme.surface }]}>
                     <Cloud size={32} color={theme.primary} />
                     <Text style={[styles.cardTitle, { color: theme.text }]}>
-                        Bulut senkronu
+                        Bulut yedek depo
                     </Text>
                     <Text style={[styles.row, { color: theme.textSecondary }]}>
-                        Firestore şema: v{FIRESTORE_SCHEMA_VERSION}
+                        Veriler önce cihazınızda tutulur. Firestore yedek kopyadır.
                     </Text>
                     <Text style={[styles.row, { color: theme.textSecondary }]}>
-                        Son senkron: {formatTime(lastSyncAt)}
+                        Şema: v{FIRESTORE_SCHEMA_VERSION}
+                    </Text>
+                    <Text style={[styles.row, { color: theme.textSecondary }]}>
+                        Son bulut kaydı: {formatTime(lastSyncAt)}
                     </Text>
                     <Text style={[styles.row, { color: theme.textSecondary }]}>
                         Bulut sürümü: {formatTime(cloudUpdatedAt)}
                     </Text>
                     <Text style={[styles.row, { color: theme.textSecondary }]}>
-                        Bekleyen değişiklik: {hasPendingCloudSync ? 'Evet' : 'Hayır'}
+                        Yedeklenmemiş değişiklik: {hasPendingCloudSync ? 'Evet' : 'Hayır'}
                     </Text>
                     {syncError && (
                         <Text style={[styles.errorText, { color: theme.danger }]}>
@@ -107,17 +124,38 @@ export default function SyncSettingsScreen() {
                     style={[
                         styles.primaryBtn,
                         { backgroundColor: theme.primary },
-                        (isSyncing || isManualSyncing) && styles.disabled,
+                        busy && styles.disabled,
                     ]}
-                    onPress={() => handleSyncNow().catch(logCatch('firebase_sync'))}
-                    disabled={isSyncing || isManualSyncing || !firebaseReady}
+                    onPress={() => handleUpload().catch(logCatch('firebase_sync'))}
+                    disabled={busy || !firebaseReady}
                 >
-                    {isSyncing || isManualSyncing ? (
+                    {isUploading || isSyncing ? (
                         <ActivityIndicator color="#FFF" />
                     ) : (
                         <>
-                            <RefreshCw size={20} color="#FFF" />
-                            <Text style={styles.primaryBtnText}>Şimdi senkronize et</Text>
+                            <Upload size={20} color="#FFF" />
+                            <Text style={styles.primaryBtnText}>Buluta yükle</Text>
+                        </>
+                    )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[
+                        styles.secondaryBtn,
+                        { borderColor: theme.border, backgroundColor: theme.surface },
+                        busy && styles.disabled,
+                    ]}
+                    onPress={() => handlePull().catch(logCatch('firebase_sync'))}
+                    disabled={busy || !firebaseReady}
+                >
+                    {isPulling ? (
+                        <ActivityIndicator color={theme.primary} />
+                    ) : (
+                        <>
+                            <Download size={20} color={theme.primary} />
+                            <Text style={[styles.secondaryBtnText, { color: theme.text }]}>
+                                Buluttan indir
+                            </Text>
                         </>
                     )}
                 </TouchableOpacity>
@@ -135,8 +173,10 @@ export default function SyncSettingsScreen() {
                 )}
 
                 <Text style={[styles.hint, { color: theme.textSecondary }]}>
-                    İşlemler ve hatırlatıcılar cihazlar arasında otomatik senkronize edilir.
-                    Uygulama arka plana alındığında bekleyen değişiklikler hemen yüklenir.
+                    Giriş yaptığınızda veriler bir kez buluttan indirilir. Oturum
+                    boyunca internet gerekmez. Değişiklikler uygulama kapanırken veya
+                    «Buluta yükle» ile yedeklenir. Uygulamayı silerseniz yerel önbellek
+                    sıfırlanır; tekrar girişte veriler buluttan gelir.
                 </Text>
             </ScrollView>
         </View>

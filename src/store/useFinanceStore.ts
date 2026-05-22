@@ -3,7 +3,6 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { createFinancePersistStorage } from './financeStorage';
 import { remindersForCloud } from '../utils/cloudSnapshot';
 import { generateId } from '../utils/id';
-import { enqueueCloudDelta } from '../services/sync/cloudSync';
 
 export type TransactionType = 'income' | 'expense';
 export type PaymentMethod = 'cash' | 'card';
@@ -35,6 +34,7 @@ interface FinanceState {
     incomeCategories: string[];
     expenseCategories: string[];
     monthlyExpenseBudget: number | null;
+    /** Yerel önbellek hazır (ağ beklenmez) */
     isCloudDataReady: boolean;
     cloudUpdatedAt: string | null;
     syncError: string | null;
@@ -84,14 +84,6 @@ interface FinanceState {
     getTotalBalance: () => number;
 }
 
-function settingsPatchFromState(state: FinanceState) {
-    return {
-        incomeCategories: state.incomeCategories,
-        expenseCategories: state.expenseCategories,
-        monthlyExpenseBudget: state.monthlyExpenseBudget,
-    };
-}
-
 export const useFinanceStore = create<FinanceState>()(
     persist(
         (set, get) => ({
@@ -122,54 +114,41 @@ export const useFinanceStore = create<FinanceState>()(
                     ),
                     hasPendingCloudSync: true,
                 }));
-                enqueueCloudDelta({ type: 'upsertTransaction', tx });
             },
 
-            deleteTransaction: (id) => {
+            deleteTransaction: (id) =>
                 set((state) => ({
                     transactions: state.transactions.filter((t) => t.id !== id),
                     hasPendingCloudSync: true,
-                }));
-                enqueueCloudDelta({ type: 'deleteTransaction', id });
-            },
+                })),
 
-            updateTransaction: (id, patch) => {
-                let updated: Transaction | undefined;
-                set((state) => {
-                    const transactions = state.transactions
-                        .map((t) => {
-                            if (t.id !== id) return t;
-                            updated = {
-                                ...t,
-                                ...patch,
-                                amount:
-                                    patch.amount != null
-                                        ? Math.min(patch.amount, 9999999999)
-                                        : t.amount,
-                            };
-                            return updated;
-                        })
+            updateTransaction: (id, patch) =>
+                set((state) => ({
+                    transactions: state.transactions
+                        .map((t) =>
+                            t.id === id
+                                ? {
+                                      ...t,
+                                      ...patch,
+                                      amount:
+                                          patch.amount != null
+                                              ? Math.min(patch.amount, 9999999999)
+                                              : t.amount,
+                                  }
+                                : t
+                        )
                         .sort(
                             (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-                        );
-                    return { transactions, hasPendingCloudSync: true };
-                });
-                if (updated) {
-                    enqueueCloudDelta({ type: 'upsertTransaction', tx: updated });
-                }
-            },
+                        ),
+                    hasPendingCloudSync: true,
+                })),
 
             addReminder: (reminder) => {
                 const id = generateId();
-                const full: Reminder = { ...reminder, id };
                 set((state) => ({
-                    reminders: [...state.reminders, full],
+                    reminders: [...state.reminders, { ...reminder, id }],
                     hasPendingCloudSync: true,
                 }));
-                enqueueCloudDelta({
-                    type: 'upsertReminder',
-                    reminder: remindersForCloud([full])[0],
-                });
                 return id;
             },
 
@@ -191,23 +170,13 @@ export const useFinanceStore = create<FinanceState>()(
                     };
                 }),
 
-            updateReminder: (id, patch) => {
-                let updated: Reminder | undefined;
+            updateReminder: (id, patch) =>
                 set((state) => ({
-                    reminders: state.reminders.map((r) => {
-                        if (r.id !== id) return r;
-                        updated = { ...r, ...patch };
-                        return updated;
-                    }),
+                    reminders: state.reminders.map((r) =>
+                        r.id === id ? { ...r, ...patch } : r
+                    ),
                     hasPendingCloudSync: true,
-                }));
-                if (updated) {
-                    enqueueCloudDelta({
-                        type: 'upsertReminder',
-                        reminder: remindersForCloud([updated])[0],
-                    });
-                }
-            },
+                })),
 
             deleteReminder: (id) => {
                 const existing = get().reminders.find((r) => r.id === id);
@@ -215,23 +184,18 @@ export const useFinanceStore = create<FinanceState>()(
                     reminders: state.reminders.filter((r) => r.id !== id),
                     hasPendingCloudSync: true,
                 }));
-                enqueueCloudDelta({ type: 'deleteReminder', id });
                 return existing;
             },
 
             setReminders: (reminders) =>
                 set({ reminders, hasPendingCloudSync: true }),
 
-            setMonthlyExpenseBudget: (amount) => {
-                const monthlyExpenseBudget =
-                    amount != null && amount > 0 ? Math.min(amount, 9999999999) : null;
-                set({ monthlyExpenseBudget, hasPendingCloudSync: true });
-                const s = get();
-                enqueueCloudDelta({
-                    type: 'patchSettings',
-                    patch: settingsPatchFromState(s),
-                });
-            },
+            setMonthlyExpenseBudget: (amount) =>
+                set({
+                    monthlyExpenseBudget:
+                        amount != null && amount > 0 ? Math.min(amount, 9999999999) : null,
+                    hasPendingCloudSync: true,
+                }),
 
             hydrateFromCloud: (data, updatedAt) => {
                 const localNotifById = new Map(
@@ -276,31 +240,21 @@ export const useFinanceStore = create<FinanceState>()(
             setLastSyncAt: (at) => set({ lastSyncAt: at }),
             setCloudUpdatedAt: (at) => set({ cloudUpdatedAt: at }),
 
-            addCategory: (type, name) => {
+            addCategory: (type, name) =>
                 set((state) => {
                     const key = type === 'income' ? 'incomeCategories' : 'expenseCategories';
                     if (state[key].includes(name)) return state;
                     return { [key]: [...state[key], name], hasPendingCloudSync: true };
-                });
-                enqueueCloudDelta({
-                    type: 'patchSettings',
-                    patch: settingsPatchFromState(get()),
-                });
-            },
+                }),
 
-            deleteCategory: (type, name) => {
+            deleteCategory: (type, name) =>
                 set((state) => {
                     const key = type === 'income' ? 'incomeCategories' : 'expenseCategories';
                     return {
                         [key]: state[key].filter((c) => c !== name),
                         hasPendingCloudSync: true,
                     };
-                });
-                enqueueCloudDelta({
-                    type: 'patchSettings',
-                    patch: settingsPatchFromState(get()),
-                });
-            },
+                }),
 
             resetData: () =>
                 set({
@@ -326,7 +280,7 @@ export const useFinanceStore = create<FinanceState>()(
         {
             name: 'finance-storage',
             storage: createJSONStorage(() => createFinancePersistStorage()),
-            version: 4,
+            version: 5,
             partialize: (state) => ({
                 transactions: state.transactions,
                 reminders: state.reminders,
@@ -335,6 +289,7 @@ export const useFinanceStore = create<FinanceState>()(
                 monthlyExpenseBudget: state.monthlyExpenseBudget,
                 cloudUpdatedAt: state.cloudUpdatedAt,
                 lastSyncAt: state.lastSyncAt,
+                hasPendingCloudSync: state.hasPendingCloudSync,
             }),
             migrate: (persisted: unknown, version) => {
                 const state = persisted as Partial<FinanceState>;
@@ -352,12 +307,20 @@ export const useFinanceStore = create<FinanceState>()(
                         cloudUpdatedAt: migrated.cloudUpdatedAt ?? null,
                         lastSyncAt: migrated.lastSyncAt ?? null,
                         monthlyExpenseBudget: null,
+                        hasPendingCloudSync: false,
                     };
                 }
                 if (version < 4) {
                     return {
                         ...migrated,
                         monthlyExpenseBudget: migrated.monthlyExpenseBudget ?? null,
+                        hasPendingCloudSync: false,
+                    };
+                }
+                if (version < 5) {
+                    return {
+                        ...migrated,
+                        hasPendingCloudSync: migrated.hasPendingCloudSync ?? false,
                     };
                 }
                 return migrated;

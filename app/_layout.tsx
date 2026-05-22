@@ -8,17 +8,15 @@ import { setupNotifications } from '../src/utils/notifications';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFirebaseSync } from '../src/hooks/useFirebaseSync';
 import { useSyncLifecycle } from '../src/hooks/useSyncLifecycle';
-import { View, ActivityIndicator, StyleSheet, Text } from 'react-native';
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { isFirebaseConfigured } from '../src/config/firebase';
-import { useFinanceStore } from '../src/store/useFinanceStore';
 import { FeedbackRoot } from '../src/components/feedback';
 import { migrateLegacyLocalPin } from '../src/store/useAuthStore';
 import { logCatch } from '../src/utils/logger';
 import { AppLockGate } from '../src/components/AppLockGate';
 
 export default function RootLayout() {
-    const { isAuthenticated, isLoading, initialize, user, authMode } = useAuthStore();
-    const isCloudDataReady = useFinanceStore((s) => s.isCloudDataReady);
+    const { isAuthenticated, isLoading, initialize } = useAuthStore();
     const segments = useSegments();
     const router = useRouter();
     const navigationState = useRootNavigationState();
@@ -48,22 +46,10 @@ export default function RootLayout() {
         }
     }, [isAuthenticated, segments, navigationState?.key, isReady, isLoading]);
 
-    const waitingForCloudData =
-        isFirebaseConfigured() &&
-        authMode === 'firebase' &&
-        isAuthenticated &&
-        !!user?.uid &&
-        !isCloudDataReady;
-
-    if (!isReady || (isFirebaseConfigured() && isLoading) || waitingForCloudData) {
+    if (!isReady || (isFirebaseConfigured() && isLoading)) {
         return (
             <View style={[styles.loading, { backgroundColor: theme.background }]}>
                 <ActivityIndicator size="large" color={theme.primary} />
-                {waitingForCloudData && (
-                    <Text style={[styles.loadingText, { color: theme.textSecondary }]}>
-                        Verileriniz yükleniyor...
-                    </Text>
-                )}
             </View>
         );
     }
@@ -116,9 +102,5 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         gap: 12,
-    },
-    loadingText: {
-        fontSize: 14,
-        marginTop: 8,
     },
 });

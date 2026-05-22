@@ -8,7 +8,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useAppTheme } from '../theme/useAppTheme';
 import { Spacing, Radius } from '../theme';
 import { isFirebaseConfigured } from '../config/firebase';
-import { syncNowPending } from '../hooks/useFirebaseSync';
+import { syncNowUpload } from '../hooks/useFirebaseSync';
 import { logCatch } from '../utils/logger';
 
 export function SyncStatusBanner() {
@@ -33,7 +33,7 @@ export function SyncStatusBanner() {
         : isSyncing
           ? 'Kaydediliyor…'
           : hasPendingCloudSync
-            ? 'Bekleyen değişiklikler var'
+            ? 'Buluta yedeklenmedi'
             : '';
 
     const subText =
@@ -45,7 +45,7 @@ export function SyncStatusBanner() {
         if (syncError) {
             clearSyncError();
         }
-        syncNowPending().catch(logCatch('firebase_sync'));
+        syncNowUpload().catch(logCatch('firebase_sync'));
     };
 
     return (
