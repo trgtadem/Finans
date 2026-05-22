@@ -2,20 +2,27 @@ import { useEffect, useRef } from 'react';
 import { isFirebaseConfigured } from '../config/firebase';
 import {
     subscribeToUserFinance,
-    saveUserFinance,
     type UserFinanceData,
     type FinanceSnapshotMeta,
-} from '../services/firebase/userData';
+} from '../services/firebase/financeRepository';
 import { syncLocalReminderNotifications } from '../services/notifications/reconcileReminders';
 import { useAuthStore } from '../store/useAuthStore';
 import { useFinanceStore } from '../store/useFinanceStore';
+import { useAppSettingsStore } from '../store/useAppSettingsStore';
 import { startFinanceSession, clearFinanceSession } from '../store/financeSession';
-import { cloudSnapshotKey } from '../utils/cloudSnapshot';
+import { cloudSnapshotKey, cloudSnapshotKeyFromFinanceData } from '../utils/cloudSnapshot';
 import { hasFinanceContent, isRemoteFinanceEmpty } from '../utils/financeData';
-import { feedback } from '../components/feedback';
 import { logCatch, logger } from '../utils/logger';
+import {
+    setCloudSyncUser,
+    beginSuppressCloudUpload,
+    endSuppressCloudUpload,
+    setLastUploadedSnapshotKey,
+    getLastUploadedSnapshotKey,
+    flushPendingCloudSync,
+    flushFullCloudSync,
+} from '../services/sync/cloudSync';
 
-const SYNC_DEBOUNCE_MS = 400;
 const CLOUD_READY_TIMEOUT_MS = 15_000;
 
 export function useFirebaseSync() {
@@ -24,18 +31,18 @@ export function useFirebaseSync() {
     const isCloudDataReady = useFinanceStore((s) => s.isCloudDataReady);
 
     const uploadSuppressed = useRef(0);
-    const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const userIdRef = useRef<string | null>(null);
     const prevUidRef = useRef<string | null>(null);
     const hasReceivedInitialSnapshot = useRef(false);
     const lastUploadedUpdatedAt = useRef<string | null>(null);
-    const lastUploadedSnapshotKey = useRef<string | null>(null);
 
     const beginSuppressUpload = () => {
         uploadSuppressed.current += 1;
+        beginSuppressCloudUpload();
     };
     const endSuppressUpload = () => {
         uploadSuppressed.current = Math.max(0, uploadSuppressed.current - 1);
+        endSuppressCloudUpload();
     };
 
     const markCloudReady = () => {
@@ -45,6 +52,8 @@ export function useFirebaseSync() {
     };
 
     const scheduleNotificationSync = () => {
+        const reconcile = useAppSettingsStore.getState().reconcileNotificationsOnRemoteSync;
+        if (!reconcile) return;
         syncLocalReminderNotifications(useFinanceStore.getState().reminders).catch(
             logCatch('notifications')
         );
@@ -56,6 +65,7 @@ export function useFirebaseSync() {
             reminders: ReturnType<typeof useFinanceStore.getState>['reminders'];
             incomeCategories: string[];
             expenseCategories: string[];
+            monthlyExpenseBudget?: number | null;
             updatedAt: string;
         },
         options: { isInitial: boolean; fromOtherDevice: boolean }
@@ -69,6 +79,7 @@ export function useFirebaseSync() {
                     reminders: data.reminders,
                     incomeCategories: data.incomeCategories,
                     expenseCategories: data.expenseCategories,
+                    monthlyExpenseBudget: data.monthlyExpenseBudget,
                 },
                 data.updatedAt
             );
@@ -89,14 +100,20 @@ export function useFirebaseSync() {
         const store = useFinanceStore.getState();
         const cloudAt = store.cloudUpdatedAt ?? '';
         const localHasData = hasFinanceContent(store);
+        const remoteContentKey = cloudSnapshotKeyFromFinanceData(data);
 
-        const isEcho =
+        const isTimestampEcho =
             lastUploadedUpdatedAt.current != null &&
             data.updatedAt === lastUploadedUpdatedAt.current;
 
-        if (isEcho) {
+        const isContentEcho =
+            getLastUploadedSnapshotKey() != null &&
+            getLastUploadedSnapshotKey() === remoteContentKey;
+
+        if (isTimestampEcho || isContentEcho) {
             store.setLastSyncAt(data.updatedAt);
             store.setCloudUpdatedAt(data.updatedAt);
+            store.clearPendingCloudSync();
             markCloudReady();
             return;
         }
@@ -111,12 +128,14 @@ export function useFirebaseSync() {
             if (!meta.exists && localHasData) {
                 markCloudReady();
                 scheduleNotificationSync();
+                flushFullCloudSync().catch(logCatch('firebase_sync'));
                 return;
             }
 
             if (meta.exists && isRemoteFinanceEmpty(data) && localHasData) {
                 markCloudReady();
                 scheduleNotificationSync();
+                flushFullCloudSync().catch(logCatch('firebase_sync'));
                 return;
             }
 
@@ -135,14 +154,21 @@ export function useFirebaseSync() {
                 reminders: data.reminders,
                 incomeCategories: data.incomeCategories,
                 expenseCategories: data.expenseCategories,
+                monthlyExpenseBudget: data.monthlyExpenseBudget,
                 updatedAt: data.updatedAt,
             },
             { isInitial, fromOtherDevice }
         );
+
+        lastUploadedUpdatedAt.current = data.updatedAt;
+        setLastUploadedSnapshotKey(remoteContentKey);
     };
 
     useEffect(() => {
-        if (!isFirebaseConfigured() || authMode !== 'firebase') return;
+        if (!isFirebaseConfigured() || authMode !== 'firebase') {
+            setCloudSyncUser(null, false);
+            return;
+        }
 
         if (!user?.uid) {
             if (prevUidRef.current) {
@@ -150,7 +176,8 @@ export function useFirebaseSync() {
                 userIdRef.current = null;
                 hasReceivedInitialSnapshot.current = false;
                 lastUploadedUpdatedAt.current = null;
-                lastUploadedSnapshotKey.current = null;
+                setLastUploadedSnapshotKey(null);
+                setCloudSyncUser(null, false);
                 clearFinanceSession().catch(logCatch('session'));
             }
             return;
@@ -164,11 +191,11 @@ export function useFirebaseSync() {
         userIdRef.current = uid;
         hasReceivedInitialSnapshot.current = false;
         lastUploadedUpdatedAt.current = null;
-        lastUploadedSnapshotKey.current = null;
+        setLastUploadedSnapshotKey(null);
+        setCloudSyncUser(uid, true);
 
         let cancelled = false;
         let unsubscribeRemote: (() => void) | undefined;
-        let unsubscribeLocal: (() => void) | undefined;
 
         const readyTimeout = setTimeout(() => {
             if (!hasReceivedInitialSnapshot.current) {
@@ -184,74 +211,59 @@ export function useFirebaseSync() {
                 await startFinanceSession(uid, { reset: switchedAccount });
             } catch (err) {
                 logger.firebaseSync.error('Finance session bootstrap failed', err);
+                useFinanceStore.getState().setSyncError(
+                    'Yerel veriler yüklendi; bulut bağlantısı kurulamadı.'
+                );
                 markCloudReady();
             }
 
             if (cancelled) return;
 
-            unsubscribeRemote = subscribeToUserFinance(uid, (data, meta) => {
-                handleRemoteSnapshot(data, meta);
-            });
-
-            unsubscribeLocal = useFinanceStore.subscribe(() => {
-                if (!hasReceivedInitialSnapshot.current) return;
-                if (uploadSuppressed.current > 0) return;
-                if (!userIdRef.current) return;
-
-                if (syncTimer.current) clearTimeout(syncTimer.current);
-                syncTimer.current = setTimeout(async () => {
-                    if (uploadSuppressed.current > 0) return;
-
-                    const activeUid = userIdRef.current;
-                    if (!activeUid || !useFinanceStore.getState().isCloudDataReady) return;
-
-                    const store = useFinanceStore.getState();
-                    const snapshot = store.getCloudSnapshot();
-                    const snapshotKey = cloudSnapshotKey(snapshot);
-                    if (snapshotKey === lastUploadedSnapshotKey.current) return;
-
-                    store.setIsSyncing(true);
-                    store.clearSyncError();
-
-                    try {
-                        const uploadedAt = await saveUserFinance(
-                            activeUid,
-                            snapshot,
-                            { ifRemoteOlderThan: store.cloudUpdatedAt ?? undefined }
-                        );
-                        lastUploadedUpdatedAt.current = uploadedAt;
-                        lastUploadedSnapshotKey.current = snapshotKey;
-                        store.setLastSyncAt(uploadedAt);
-                        store.setCloudUpdatedAt(uploadedAt);
-                        store.clearSyncError();
-                    } catch (err) {
-                        if (
-                            err instanceof Error &&
-                            err.message === 'REMOTE_NEWER_THAN_LOCAL'
-                        ) {
-                            feedback.warning(
-                                'Buluttaki veri daha yeni; yerel değişiklik atlandı.'
-                            );
-                        } else {
-                            store.setSyncError(
-                                'Veriler kaydedilemedi. Bağlantınızı kontrol edin.'
-                            );
-                        }
-                    } finally {
-                        store.setIsSyncing(false);
-                    }
-                }, SYNC_DEBOUNCE_MS);
-            });
+            unsubscribeRemote = subscribeToUserFinance(
+                uid,
+                (data, meta) => {
+                    handleRemoteSnapshot(data, meta);
+                },
+                {
+                    onError: (message) => {
+                        useFinanceStore.getState().setSyncError(message);
+                        markCloudReady();
+                    },
+                }
+            );
         })();
 
         return () => {
             cancelled = true;
             clearTimeout(readyTimeout);
             unsubscribeRemote?.();
-            unsubscribeLocal?.();
-            if (syncTimer.current) clearTimeout(syncTimer.current);
+            setCloudSyncUser(null, false);
         };
     }, [user?.uid, authMode]);
 
+    useEffect(() => {
+        if (!isFirebaseConfigured() || authMode !== 'firebase' || !user?.uid) return;
+
+        let prevPending = useFinanceStore.getState().hasPendingCloudSync;
+        const unsub = useFinanceStore.subscribe((state) => {
+            const pending = state.hasPendingCloudSync;
+            if (pending && !prevPending && hasReceivedInitialSnapshot.current) {
+                flushPendingCloudSync().catch(logCatch('firebase_sync'));
+            }
+            prevPending = pending;
+        });
+
+        return unsub;
+    }, [user?.uid, authMode]);
+
     return { isCloudDataReady };
+}
+
+/** Manuel senkron ve ayarlar ekranı */
+export async function syncNowFull(): Promise<void> {
+    await flushFullCloudSync();
+}
+
+export async function syncNowPending(): Promise<void> {
+    await flushPendingCloudSync();
 }

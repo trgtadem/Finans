@@ -15,7 +15,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.finans.android"
+      "bundleIdentifier": "com.finans.android",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Finans uygulamasını güvenli şekilde açmak için Face ID kullanılır."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -40,7 +43,13 @@
           "sounds": []
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Finans uygulamasını güvenli şekilde açmak için Face ID kullanılır."
+        }
+      ]
     ],
     "notification": {
       "icon": "./assets/icon.png",

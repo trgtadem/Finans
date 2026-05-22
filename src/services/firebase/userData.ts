@@ -8,6 +8,7 @@ export interface UserFinanceData {
     reminders: Reminder[];
     incomeCategories: string[];
     expenseCategories: string[];
+    monthlyExpenseBudget?: number | null;
     updatedAt: string;
 }
 
@@ -16,6 +17,7 @@ export const DEFAULT_FINANCE_DATA: UserFinanceData = {
     reminders: [],
     incomeCategories: ['Maaş', 'Satış', 'Bonus', 'Faiz', 'Diğer'],
     expenseCategories: ['Gıda', 'Ulaşım', 'Eğlence', 'Kira', 'Fatura', 'Genel'],
+    monthlyExpenseBudget: null,
     updatedAt: new Date(0).toISOString(),
 };
 
@@ -38,6 +40,7 @@ function parseFinanceDoc(raw: Partial<UserFinanceData>): UserFinanceData {
             raw.incomeCategories ?? DEFAULT_FINANCE_DATA.incomeCategories,
         expenseCategories:
             raw.expenseCategories ?? DEFAULT_FINANCE_DATA.expenseCategories,
+        monthlyExpenseBudget: raw.monthlyExpenseBudget ?? null,
         updatedAt: raw.updatedAt ?? new Date().toISOString(),
     };
 }

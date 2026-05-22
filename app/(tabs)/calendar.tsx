@@ -9,6 +9,7 @@ import { tr } from 'date-fns/locale';
 import { CreditCard, Banknote, Plus, Bell, Trash2 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useAppTheme } from '../../src/theme/useAppTheme';
+import { useAppSettingsStore } from '../../src/store/useAppSettingsStore';
 
 // Configure Turkish locale for Calendar
 LocaleConfig.locales['tr'] = {
@@ -24,6 +25,7 @@ export default function CalendarScreen() {
     const router = useRouter();
     const { transactions, reminders, deleteReminder } = useFinanceStore();
     const { theme, colorScheme } = useAppTheme();
+    const lowPowerMode = useAppSettingsStore((s) => s.lowPowerMode);
     const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
     const iconBackgrounds = useMemo(
@@ -36,33 +38,33 @@ export default function CalendarScreen() {
     );
 
     const markedDates = useMemo(() => {
-        const marks: any = {};
+        const marks: Record<string, { marked?: boolean; dotColor?: string; selected?: boolean; selectedColor?: string }> = {};
 
-        // Mark transactions
-        transactions.forEach(t => {
-            const dateKey = format(parseISO(t.date), 'yyyy-MM-dd');
-            if (!marks[dateKey]) {
-                marks[dateKey] = { marked: true, dotColor: theme.primary };
-            }
-        });
+        if (!lowPowerMode) {
+            transactions.forEach((t) => {
+                const dateKey = format(parseISO(t.date), 'yyyy-MM-dd');
+                if (!marks[dateKey]) {
+                    marks[dateKey] = { marked: true, dotColor: theme.primary };
+                }
+            });
 
-        // Mark reminders
-        reminders.forEach(r => {
-            const dateKey = r.date; // already yyyy-MM-dd
-            if (!marks[dateKey]) {
-                marks[dateKey] = { marked: true, dotColor: theme.success };
-            } else {
-                marks[dateKey] = { ...marks[dateKey], dotColor: theme.primary }; // Keep primary if both exist
-            }
-        });
+            reminders.forEach((r) => {
+                const dateKey = r.date;
+                if (!marks[dateKey]) {
+                    marks[dateKey] = { marked: true, dotColor: theme.success };
+                } else {
+                    marks[dateKey] = { ...marks[dateKey], dotColor: theme.primary };
+                }
+            });
+        }
 
         marks[selectedDate] = {
             ...marks[selectedDate],
             selected: true,
-            selectedColor: theme.primary
+            selectedColor: theme.primary,
         };
         return marks;
-    }, [transactions, reminders, selectedDate, theme.primary, theme.success]);
+    }, [transactions, reminders, selectedDate, theme.primary, theme.success, lowPowerMode]);
 
     const dayItems = useMemo(() => {
         const dayTransactions = transactions
@@ -87,18 +89,23 @@ export default function CalendarScreen() {
         }
     };
 
-    const isStrictFuture = useMemo(() => {
+    const canAddReminder = useMemo(() => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        return parseISO(selectedDate) > today;
+        const selected = parseISO(selectedDate);
+        selected.setHours(0, 0, 0, 0);
+        return selected >= today;
     }, [selectedDate]);
 
-    const handleAdd = () => {
-        if (isStrictFuture) {
-            router.push({ pathname: '/reminder/add', params: { date: selectedDate } });
-        } else {
-            router.push({ pathname: '/transaction/add', params: { date: parseISO(selectedDate).toISOString() } });
-        }
+    const handleAddReminder = () => {
+        router.push({ pathname: '/reminder/add', params: { date: selectedDate } });
+    };
+
+    const handleAddTransaction = () => {
+        router.push({
+            pathname: '/transaction/add',
+            params: { date: parseISO(selectedDate).toISOString() },
+        });
     };
 
     return (
@@ -131,19 +138,44 @@ export default function CalendarScreen() {
                 <Text style={[styles.listTitle, { color: theme.text }]}>
                     {format(parseISO(selectedDate), 'd MMMM yyyy', { locale: tr })}
                 </Text>
-                <TouchableOpacity
-                    style={[styles.addButton, { backgroundColor: theme.primary }]}
-                    onPress={handleAdd}
-                >
-                    <Plus size={20} color="#FFF" />
-                </TouchableOpacity>
+                <View style={styles.addActions}>
+                    {canAddReminder && (
+                        <TouchableOpacity
+                            style={[styles.addButton, { backgroundColor: theme.secondary }]}
+                            onPress={handleAddReminder}
+                        >
+                            <Bell size={18} color="#FFF" />
+                        </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                        style={[styles.addButton, { backgroundColor: theme.primary }]}
+                        onPress={handleAddTransaction}
+                    >
+                        <Plus size={20} color="#FFF" />
+                    </TouchableOpacity>
+                </View>
             </View>
 
             <FlatList
                 data={dayItems}
                 keyExtractor={(item: any) => item.id}
                 renderItem={({ item }: { item: any }) => (
-                    <View style={[styles.transactionItem, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                    <TouchableOpacity
+                        style={[styles.transactionItem, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                        onPress={() => {
+                            if (item.itemType === 'transaction') {
+                                router.push({
+                                    pathname: '/transaction/edit',
+                                    params: { id: item.id },
+                                });
+                            } else {
+                                router.push({
+                                    pathname: '/reminder/edit',
+                                    params: { id: item.id },
+                                });
+                            }
+                        }}
+                    >
                         {item.itemType === 'transaction' ? (
                             <>
                                 <View style={[styles.iconBox, { backgroundColor: item.method === 'card' ? iconBackgrounds.card : iconBackgrounds.cash }]}>
@@ -177,7 +209,7 @@ export default function CalendarScreen() {
                                 </TouchableOpacity>
                             </>
                         )}
-                    </View>
+                    </TouchableOpacity>
                 )}
                 contentContainerStyle={styles.listContent}
                 ListEmptyComponent={
@@ -207,6 +239,10 @@ const styles = StyleSheet.create({
     listTitle: {
         fontSize: 18,
         fontWeight: 'bold',
+    },
+    addActions: {
+        flexDirection: 'row',
+        gap: Spacing.sm,
     },
     addButton: {
         width: 36,

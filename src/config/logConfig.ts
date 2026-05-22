@@ -21,7 +21,7 @@ export const logConfig = {
 
     /** Kategori bazlı aç/kapa */
     categories: {
-        general: false,
+        general: true,
         auth: true,
         firebase_sync: true,
         firebase_push: false,

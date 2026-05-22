@@ -1,13 +1,24 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import {
+    View,
+    Text,
+    StyleSheet,
+    TouchableOpacity,
+    Modal,
+    TextInput,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFinanceStore } from '../../src/store/useFinanceStore';
 import { useAuthStore } from '../../src/store/useAuthStore';
 import { Spacing, Radius } from '../../src/theme';
-import { Settings, Lock, Trash2, Trophy, RotateCcw, X, LogOut, Palette, FileText } from 'lucide-react-native';
-import { Link } from 'expo-router';
+import { Settings, Lock, Trash2, Trophy, RotateCcw, X, LogOut, Palette, FileText, Target, Shield, Cloud, Gauge } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 import { useAppTheme } from '../../src/theme/useAppTheme';
 import { isFirebaseConfigured } from '../../src/config/firebase';
-import { clearUserFinance } from '../../src/services/firebase/userData';
+import { clearUserFinance } from '../../src/services/firebase/financeRepository';
 import {
     sanitizePinInput,
     pinValidationMessage,
@@ -16,7 +27,42 @@ import {
 import { feedback } from '../../src/components/feedback';
 import { verifyLocalPin } from '../../src/utils/securePin';
 
+type SettingsRowProps = {
+    icon: React.ReactNode;
+    label: string;
+    labelColor?: string;
+    onPress: () => void;
+    isLast?: boolean;
+    theme: ReturnType<typeof useAppTheme>['theme'];
+};
+
+function SettingsRow({ icon, label, labelColor, onPress, isLast, theme }: SettingsRowProps) {
+    return (
+        <TouchableOpacity
+            style={[
+                styles.settingsItem,
+                { borderBottomColor: theme.border },
+                isLast && styles.settingsItemLast,
+            ]}
+            onPress={onPress}
+            activeOpacity={0.7}
+        >
+            <View style={styles.settingsIcon}>{icon}</View>
+            <Text
+                style={[
+                    styles.settingsItemText,
+                    { color: labelColor ?? theme.text },
+                ]}
+                numberOfLines={2}
+            >
+                {label}
+            </Text>
+        </TouchableOpacity>
+    );
+}
+
 export default function ProfileScreen() {
+    const router = useRouter();
     const { transactions, resetData } = useFinanceStore();
     const {
         logout,
@@ -28,6 +74,7 @@ export default function ProfileScreen() {
         clearAuthError,
     } = useAuthStore();
     const { theme } = useAppTheme();
+    const insets = useSafeAreaInsets();
     const useFirebase = isFirebaseConfigured() && authMode === 'firebase';
 
     const [isResetModalVisible, setIsResetModalVisible] = useState(false);
@@ -46,6 +93,16 @@ export default function ProfileScreen() {
 
     const displayName = user?.email?.split('@')[0] ?? 'Kullanıcı';
     const avatarLetter = (user?.email?.[0] ?? displayName[0] ?? 'K').toUpperCase();
+
+    const handleLogout = () => {
+        feedback.confirm({
+            title: 'Çıkış Yap',
+            message: 'Hesabınızdan çıkış yapılacak. Emin misiniz?',
+            confirmText: 'Çıkış Yap',
+            destructive: true,
+            onConfirm: () => logout(),
+        });
+    };
 
     const handleReset = () => {
         setIsResetModalVisible(true);
@@ -252,71 +309,129 @@ export default function ProfileScreen() {
                 </KeyboardAvoidingView>
             </Modal>
 
-            <View style={styles.header}>
-                <View style={styles.profileRow}>
-                    <View style={[styles.avatar, { backgroundColor: theme.primary }]}>
-                        <Text style={styles.avatarText}>{avatarLetter}</Text>
+            <ScrollView
+                style={styles.scroll}
+                contentContainerStyle={[
+                    styles.scrollContent,
+                    { paddingBottom: Spacing.xl + insets.bottom + 24 },
+                ]}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+            >
+                <View style={styles.header}>
+                    <View style={styles.profileRow}>
+                        <View style={[styles.avatar, { backgroundColor: theme.primary }]}>
+                            <Text style={styles.avatarText}>{avatarLetter}</Text>
+                        </View>
+                        <View style={styles.profileInfo}>
+                            <Text style={[styles.profileName, { color: theme.text }]}>{displayName}</Text>
+                            <Text style={[styles.profileDetails, { color: theme.textSecondary }]}>
+                                {user?.email ?? 'Finans Yönetimi'}
+                            </Text>
+                        </View>
                     </View>
-                    <View style={styles.profileInfo}>
-                        <Text style={[styles.profileName, { color: theme.text }]}>{displayName}</Text>
-                        <Text style={[styles.profileDetails, { color: theme.textSecondary }]}>
-                            {user?.email ?? 'Finans Yönetimi'}
-                        </Text>
+
+                    <View style={styles.statsRow}>
+                        <View style={[styles.statCard, { backgroundColor: theme.surface }]}>
+                            <Trophy size={20} color={theme.primary} style={{ marginBottom: 4 }} />
+                            <Text style={[styles.statValue, { color: theme.success }]}>
+                                {formatCurrency(totalIncome)}
+                            </Text>
+                            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
+                                Toplam Gelir
+                            </Text>
+                        </View>
+                        <View style={[styles.statCard, { backgroundColor: theme.surface }]}>
+                            <Trash2 size={20} color={theme.danger} style={{ marginBottom: 4 }} />
+                            <Text style={[styles.statValue, { color: theme.danger }]}>
+                                {formatCurrency(totalExpense)}
+                            </Text>
+                            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
+                                Toplam Gider
+                            </Text>
+                        </View>
                     </View>
                 </View>
 
-                <View style={styles.statsRow}>
-                    <View style={[styles.statCard, { backgroundColor: theme.surface }]}>
-                        <Trophy size={20} color={theme.primary} style={{ marginBottom: 4 }} />
-                        <Text style={[styles.statValue, { color: theme.success }]}>{formatCurrency(totalIncome)}</Text>
-                        <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Toplam Gelir</Text>
-                    </View>
-                    <View style={[styles.statCard, { backgroundColor: theme.surface }]}>
-                        <Trash2 size={20} color={theme.danger} style={{ marginBottom: 4 }} />
-                        <Text style={[styles.statValue, { color: theme.danger }]}>{formatCurrency(totalExpense)}</Text>
-                        <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Toplam Gider</Text>
-                    </View>
-                </View>
-            </View>
-
-            <View style={styles.settingsSection}>
-                <Text style={[styles.sectionTitle, { color: theme.text }]}>Ayarlar</Text>
-                <View style={[styles.settingsList, { backgroundColor: theme.surface }]}>
-                    <Link href="/settings/categories" asChild>
-                        <TouchableOpacity style={styles.settingsItem}>
-                            <Settings size={20} color={theme.primary} />
-                            <Text style={[styles.settingsItemText, { color: theme.text }]}>Hızlı Notları Düzenle</Text>
-                        </TouchableOpacity>
-                    </Link>
-                    <TouchableOpacity style={styles.settingsItem} onPress={handleOpenPasswordModal}>
-                        <Lock size={20} color={theme.success} />
-                        <Text style={[styles.settingsItemText, { color: theme.text }]}>Şifre Güncelle</Text>
-                    </TouchableOpacity>
-                    <Link href="/settings/theme" asChild>
-                        <TouchableOpacity style={styles.settingsItem}>
-                            <Palette size={20} color={theme.primary} />
-                            <Text style={[styles.settingsItemText, { color: theme.text }]}>Tema Ayarları</Text>
-                        </TouchableOpacity>
-                    </Link>
-                    <Link href="/reports" asChild>
-                        <TouchableOpacity style={styles.settingsItem}>
-                            <FileText size={20} color={theme.primary} />
-                            <Text style={[styles.settingsItemText, { color: theme.text }]}>Raporlarım</Text>
-                        </TouchableOpacity>
-                    </Link>
-                    <TouchableOpacity
-                        style={styles.settingsItem}
-                        onPress={() => logout()}
+                <View style={styles.settingsSection}>
+                    <Text style={[styles.sectionTitle, { color: theme.text }]}>Ayarlar</Text>
+                    <View
+                        style={[
+                            styles.settingsList,
+                            {
+                                backgroundColor: theme.surface,
+                                borderColor: theme.border,
+                            },
+                        ]}
                     >
-                        <LogOut size={20} color={theme.danger} />
-                        <Text style={[styles.settingsItemText, { color: theme.danger }]}>Çıkış Yap</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.settingsItem, { borderBottomWidth: 0 }]} onPress={handleReset}>
-                        <RotateCcw size={20} color={theme.danger} />
-                        <Text style={[styles.settingsItemText, { color: theme.danger }]}>Tüm Verileri Sıfırla</Text>
-                    </TouchableOpacity>
+                        <SettingsRow
+                            theme={theme}
+                            icon={<Settings size={20} color={theme.primary} />}
+                            label="Hızlı Notları Düzenle"
+                            onPress={() => router.push('/settings/categories')}
+                        />
+                        <SettingsRow
+                            theme={theme}
+                            icon={<Lock size={20} color={theme.success} />}
+                            label="Şifre Güncelle"
+                            onPress={handleOpenPasswordModal}
+                        />
+                        {useFirebase && (
+                            <SettingsRow
+                                theme={theme}
+                                icon={<Cloud size={20} color={theme.primary} />}
+                                label="Senkronizasyon"
+                                onPress={() => router.push('/settings/sync')}
+                            />
+                        )}
+                        <SettingsRow
+                            theme={theme}
+                            icon={<Gauge size={20} color={theme.secondary} />}
+                            label="Performans"
+                            onPress={() => router.push('/settings/performance')}
+                        />
+                        <SettingsRow
+                            theme={theme}
+                            icon={<Target size={20} color={theme.primary} />}
+                            label="Aylık Bütçe"
+                            onPress={() => router.push('/settings/budget')}
+                        />
+                        <SettingsRow
+                            theme={theme}
+                            icon={<Shield size={20} color={theme.success} />}
+                            label="Biyometrik Kilit"
+                            onPress={() => router.push('/settings/security')}
+                        />
+                        <SettingsRow
+                            theme={theme}
+                            icon={<Palette size={20} color={theme.primary} />}
+                            label="Tema Ayarları"
+                            onPress={() => router.push('/settings/theme')}
+                        />
+                        <SettingsRow
+                            theme={theme}
+                            icon={<FileText size={20} color={theme.primary} />}
+                            label="Raporlarım"
+                            onPress={() => router.push('/reports')}
+                        />
+                        <SettingsRow
+                            theme={theme}
+                            icon={<LogOut size={20} color={theme.danger} />}
+                            label="Çıkış Yap"
+                            labelColor={theme.danger}
+                            onPress={handleLogout}
+                        />
+                        <SettingsRow
+                            theme={theme}
+                            icon={<RotateCcw size={20} color={theme.danger} />}
+                            label="Tüm Verileri Sıfırla"
+                            labelColor={theme.danger}
+                            onPress={handleReset}
+                            isLast
+                        />
+                    </View>
                 </View>
-            </View>
+            </ScrollView>
         </View>
     );
 }
@@ -325,9 +440,15 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
     },
+    scroll: {
+        flex: 1,
+    },
+    scrollContent: {
+        flexGrow: 1,
+    },
     header: {
         padding: Spacing.lg,
-        paddingTop: 60,
+        paddingTop: Spacing.md,
     },
     profileRow: {
         flexDirection: 'row',
@@ -378,7 +499,6 @@ const styles = StyleSheet.create({
     sectionTitle: {
         fontSize: 18,
         fontWeight: 'bold',
-        paddingHorizontal: Spacing.lg,
         marginBottom: Spacing.md,
     },
     settingsSection: {
@@ -386,20 +506,36 @@ const styles = StyleSheet.create({
         marginBottom: Spacing.xl,
     },
     settingsList: {
+        width: '100%',
         borderRadius: Radius.lg,
+        borderWidth: 1,
         overflow: 'hidden',
         elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.06,
+        shadowRadius: 4,
     },
     settingsItem: {
         flexDirection: 'row',
         alignItems: 'center',
+        width: '100%',
+        minHeight: 52,
         paddingVertical: Spacing.md,
-        paddingLeft: Spacing.md + 10,
-        paddingRight: Spacing.md,
-        gap: Spacing.md,
-        borderBottomWidth: 1,
+        paddingHorizontal: Spacing.md,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    settingsItemLast: {
+        borderBottomWidth: 0,
+    },
+    settingsIcon: {
+        width: 28,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: Spacing.md,
     },
     settingsItemText: {
+        flex: 1,
         fontSize: 16,
         fontWeight: '500',
     },

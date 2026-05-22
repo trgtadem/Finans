@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router';
 import { useAppTheme } from '../../src/theme/useAppTheme';
 import { Home, History, Calendar, User } from 'lucide-react-native';
 import { SyncStatusBanner } from '../../src/components/SyncStatusBanner';
+import { OnboardingModal } from '../../src/components/OnboardingModal';
 
 export default function TabLayout() {
     const { theme } = useAppTheme();
@@ -10,6 +11,7 @@ export default function TabLayout() {
     return (
         <View style={{ flex: 1, backgroundColor: theme.background }}>
         <SyncStatusBanner />
+        <OnboardingModal />
         <Tabs
             screenOptions={{
                 headerShown: true,

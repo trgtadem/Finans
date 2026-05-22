@@ -7,12 +7,14 @@ import { useAppTheme } from '../src/theme/useAppTheme';
 import { setupNotifications } from '../src/utils/notifications';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFirebaseSync } from '../src/hooks/useFirebaseSync';
+import { useSyncLifecycle } from '../src/hooks/useSyncLifecycle';
 import { View, ActivityIndicator, StyleSheet, Text } from 'react-native';
 import { isFirebaseConfigured } from '../src/config/firebase';
 import { useFinanceStore } from '../src/store/useFinanceStore';
 import { FeedbackRoot } from '../src/components/feedback';
 import { migrateLegacyLocalPin } from '../src/store/useAuthStore';
 import { logCatch } from '../src/utils/logger';
+import { AppLockGate } from '../src/components/AppLockGate';
 
 export default function RootLayout() {
     const { isAuthenticated, isLoading, initialize, user, authMode } = useAuthStore();
@@ -24,6 +26,7 @@ export default function RootLayout() {
     const [isReady, setIsReady] = useState(false);
 
     useFirebaseSync();
+    useSyncLifecycle();
 
     useEffect(() => {
         migrateLegacyLocalPin().catch(logCatch('pin_migration'));
@@ -67,6 +70,7 @@ export default function RootLayout() {
 
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
+            <AppLockGate>
             <Stack
                 screenOptions={{
                     headerShown: false,
@@ -87,7 +91,19 @@ export default function RootLayout() {
                         headerTintColor: theme.primary,
                     }}
                 />
+                <Stack.Screen
+                    name="transaction/edit"
+                    options={{
+                        presentation: 'modal',
+                        headerShown: true,
+                        title: 'İşlemi Düzenle',
+                        headerStyle: { backgroundColor: theme.surface },
+                        headerTitleStyle: { color: theme.text },
+                        headerTintColor: theme.primary,
+                    }}
+                />
             </Stack>
+            </AppLockGate>
             <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
             <FeedbackRoot />
         </GestureHandlerRootView>

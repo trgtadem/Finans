@@ -3,19 +3,28 @@ import { getFirestore, Firestore } from 'firebase/firestore';
 import { initializeAuth, getAuth, type Auth, type Persistence } from '@firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { firebaseConfig as exampleConfig } from './firebase.config.example';
+import { initFirebaseAppCheck } from './appCheck';
+import { logger } from '../utils/logger';
 
 let firebaseConfig = { ...exampleConfig };
 
 try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const local = require('./firebase.config') as {
-        firebaseConfig: typeof exampleConfig;
+        firebaseConfig?: typeof exampleConfig;
     };
-    if (local?.firebaseConfig?.apiKey && !local.firebaseConfig.apiKey.includes('YOUR_')) {
-        firebaseConfig = local.firebaseConfig;
+    const cfg = local?.firebaseConfig;
+    if (cfg?.apiKey && !cfg.apiKey.includes('YOUR_')) {
+        firebaseConfig = cfg;
     }
 } catch {
     // firebase.config.ts henüz oluşturulmadı — example config kullanılır
+}
+
+if (__DEV__ && firebaseConfig.apiKey.includes('YOUR_')) {
+    logger.general.warn(
+        'firebase.config.ts bulunamadı veya export eksik — yerel PIN modu kullanılır.'
+    );
 }
 
 const PLACEHOLDER_VALUES = ['YOUR_API_KEY', 'YOUR_PROJECT_ID', ''];
@@ -52,6 +61,7 @@ export function getFirebaseApp(): FirebaseApp | null {
     if (!isFirebaseConfigured()) return null;
     if (!app) {
         app = getApps().length > 0 ? getApps()[0]! : initializeApp(firebaseConfig);
+        initFirebaseAppCheck(app);
     }
     return app;
 }

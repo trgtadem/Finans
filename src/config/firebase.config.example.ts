@@ -2,6 +2,7 @@
  * Bu dosyayı `firebase.config.ts` olarak kopyalayın ve Firebase Console değerlerinizi girin.
  * firebase.config.ts git'e eklenmez (.gitignore).
  */
+/** Bu dosyayı firebase.config.ts olarak kopyalayın; export satırı zorunludur. */
 export const firebaseConfig = {
     apiKey: 'YOUR_API_KEY',
     authDomain: 'YOUR_PROJECT_ID.firebaseapp.com',

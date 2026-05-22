@@ -10,6 +10,7 @@ import {
     ActivityIndicator,
     ScrollView,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '../../src/store/useAuthStore';
 import { Spacing, Radius } from '../../src/theme';
 import { Lock, ArrowRight, Mail } from 'lucide-react-native';
@@ -21,6 +22,8 @@ import {
     PIN_LENGTH,
 } from '../../src/utils/pinAuth';
 import { feedback } from '../../src/components/feedback';
+
+const LAST_EMAIL_KEY = 'finans-last-login-email';
 
 export default function LoginScreen() {
     const [email, setEmail] = useState('');
@@ -46,7 +49,11 @@ export default function LoginScreen() {
     const useFirebase = isFirebaseConfigured();
 
     useEffect(() => {
-        if (!useFirebase) {
+        if (useFirebase) {
+            AsyncStorage.getItem(LAST_EMAIL_KEY).then((saved) => {
+                if (saved) setEmail(saved);
+            });
+        } else {
             checkLocalPinSetup();
         }
     }, [useFirebase, checkLocalPinSetup]);
@@ -80,8 +87,11 @@ export default function LoginScreen() {
         if (!success) {
             const message = useAuthStore.getState().authError;
             if (message) feedback.error(message);
-        } else if (isRegisterMode) {
-            feedback.success('Hesabınız oluşturuldu!');
+        } else {
+            await AsyncStorage.setItem(LAST_EMAIL_KEY, email.trim().toLowerCase());
+            if (isRegisterMode) {
+                feedback.success('Hesabınız oluşturuldu!');
+            }
         }
     };
 
@@ -133,7 +143,7 @@ export default function LoginScreen() {
         value: string,
         onChange: (v: string) => void,
         placeholder: string,
-        withSubmit = false
+        options?: { onSubmit?: () => void; showSubmit?: boolean }
     ) => (
         <View
             style={[
@@ -150,11 +160,16 @@ export default function LoginScreen() {
                 maxLength={PIN_LENGTH}
                 value={value}
                 onChangeText={(t) => onChange(sanitizePinInput(t))}
+                onSubmitEditing={options?.onSubmit}
+                returnKeyType="done"
             />
-            {withSubmit && (
+            {options?.showSubmit && options?.onSubmit && (
                 <TouchableOpacity
-                    style={[styles.submitButton, { backgroundColor: theme.primary, opacity: isSubmitting ? 0.6 : 1 }]}
-                    onPress={handleFirebaseSubmit}
+                    style={[
+                        styles.submitButton,
+                        { backgroundColor: theme.primary, opacity: isSubmitting ? 0.6 : 1 },
+                    ]}
+                    onPress={options.onSubmit}
                     disabled={isSubmitting}
                 >
                     {isSubmitting ? (
@@ -190,25 +205,40 @@ export default function LoginScreen() {
                             : 'E-posta ve 6 haneli şifrenizle giriş yapın.'}
                     </Text>
 
-                    <View style={[styles.inputContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                    <View
+                        style={[
+                            styles.inputContainer,
+                            { backgroundColor: theme.surface, borderColor: theme.border },
+                        ]}
+                    >
+                        <Mail size={20} color={theme.textSecondary} style={styles.fieldIcon} />
                         <TextInput
                             style={[styles.input, styles.inputNormal, { color: theme.text }]}
-                            placeholder="E-posta"
+                            placeholder="E-posta adresi"
                             placeholderTextColor={theme.textSecondary}
                             autoCapitalize="none"
+                            autoCorrect={false}
                             keyboardType="email-address"
+                            textContentType="emailAddress"
                             value={email}
                             onChangeText={setEmail}
                         />
                     </View>
 
-                    {renderPinInput(pin, setPin, '6 haneli şifre', !isRegisterMode)}
+                    {renderPinInput(pin, setPin, '6 haneli şifre', {
+                        showSubmit: !isRegisterMode,
+                        onSubmit: handleFirebaseSubmit,
+                    })}
 
-                    {isRegisterMode && renderPinInput(confirmPin, setConfirmPin, 'Şifre tekrar')}
+                    {isRegisterMode &&
+                        renderPinInput(confirmPin, setConfirmPin, 'Şifre tekrar')}
 
                     {isRegisterMode && (
                         <TouchableOpacity
-                            style={[styles.mainButton, { backgroundColor: theme.primary, opacity: isSubmitting ? 0.6 : 1 }]}
+                            style={[
+                                styles.mainButton,
+                                { backgroundColor: theme.primary, opacity: isSubmitting ? 0.6 : 1 },
+                            ]}
                             onPress={handleFirebaseSubmit}
                             disabled={isSubmitting}
                         >
@@ -216,6 +246,23 @@ export default function LoginScreen() {
                                 <ActivityIndicator color="#FFF" />
                             ) : (
                                 <Text style={styles.mainButtonText}>Kayıt Ol</Text>
+                            )}
+                        </TouchableOpacity>
+                    )}
+
+                    {!isRegisterMode && (
+                        <TouchableOpacity
+                            style={[
+                                styles.mainButton,
+                                { backgroundColor: theme.primary, opacity: isSubmitting ? 0.6 : 1 },
+                            ]}
+                            onPress={handleFirebaseSubmit}
+                            disabled={isSubmitting}
+                        >
+                            {isSubmitting ? (
+                                <ActivityIndicator color="#FFF" />
+                            ) : (
+                                <Text style={styles.mainButtonText}>Giriş Yap</Text>
                             )}
                         </TouchableOpacity>
                     )}
@@ -258,19 +305,29 @@ export default function LoginScreen() {
                 <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
                     {isLocalSetup
                         ? '6 haneli bir şifre belirleyin ve tekrar girin.'
-                        : '6 haneli şifrenizle devam edin.'}
+                        : '6 haneli şifrenizle devam edin (çevrimdışı mod).'}
                 </Text>
 
-                {renderPinInput(localPin, setLocalPin, '6 haneli şifre', !isLocalSetup)}
+                {renderPinInput(localPin, setLocalPin, '6 haneli şifre', {
+                    showSubmit: !isLocalSetup,
+                    onSubmit: handleLocalSubmit,
+                })}
 
                 {isLocalSetup && renderPinInput(localConfirmPin, setLocalConfirmPin, 'Şifre tekrar')}
 
-                {isLocalSetup && (
+                {isLocalSetup ? (
                     <TouchableOpacity
                         style={[styles.mainButton, { backgroundColor: theme.primary }]}
                         onPress={handleLocalSubmit}
                     >
                         <Text style={styles.mainButtonText}>Kaydet</Text>
+                    </TouchableOpacity>
+                ) : (
+                    <TouchableOpacity
+                        style={[styles.mainButton, { backgroundColor: theme.primary }]}
+                        onPress={handleLocalSubmit}
+                    >
+                        <Text style={styles.mainButtonText}>Giriş Yap</Text>
                     </TouchableOpacity>
                 )}
             </ScrollView>
@@ -311,12 +368,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         borderRadius: Radius.lg,
         borderWidth: 1,
-        paddingLeft: Spacing.lg,
+        paddingLeft: Spacing.md,
         width: '100%',
         minHeight: 64,
     },
+    fieldIcon: { marginRight: Spacing.sm },
     input: { flex: 1, fontSize: 16 },
-    inputNormal: { fontSize: 16 },
+    inputNormal: { fontSize: 16, paddingVertical: Spacing.md },
     pinInput: { fontSize: 22, letterSpacing: 6, textAlign: 'center' },
     submitButton: {
         width: 48,

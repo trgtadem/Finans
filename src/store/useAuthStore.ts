@@ -16,7 +16,10 @@ import {
     registerForPushNotifications,
     savePushTokenToFirestore,
 } from '../services/firebase/push';
-import { saveUserFinance, DEFAULT_FINANCE_DATA } from '../services/firebase/userData';
+import {
+    saveUserFinance,
+    DEFAULT_FINANCE_DATA,
+} from '../services/firebase/financeRepository';
 import {
     setFinanceStorageUserId,
     rehydrateFinanceStore,
@@ -83,6 +86,7 @@ export const useAuthStore = create<AuthState>()(
 
             initialize: () => {
                 if (!isAuthAvailable()) {
+                    set({ authMode: 'local' });
                     get().checkLocalPinSetup().finally(() => set({ isLoading: false }));
                     return () => {};
                 }
@@ -158,6 +162,7 @@ export const useAuthStore = create<AuthState>()(
                         reminders: [],
                         incomeCategories: DEFAULT_FINANCE_DATA.incomeCategories,
                         expenseCategories: DEFAULT_FINANCE_DATA.expenseCategories,
+                        monthlyExpenseBudget: null,
                     });
                     set({
                         isAuthenticated: true,

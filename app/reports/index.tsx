@@ -19,6 +19,7 @@ import { Spacing, Radius } from '../../src/theme';
 import { useAppTheme } from '../../src/theme/useAppTheme';
 import { feedback } from '../../src/components/feedback';
 import { logger } from '../../src/utils/logger';
+import { shareTransactionsCsv } from '../../src/utils/csvExport';
 
 type RangeKey = 'all' | '30d' | '90d' | 'month';
 type StatementRow = Transaction & { balanceAfter: number };
@@ -65,6 +66,7 @@ export default function ReportsScreen() {
     const { theme } = useAppTheme();
     const [selectedRange, setSelectedRange] = useState<RangeKey>('month');
     const [isExporting, setIsExporting] = useState(false);
+    const [isCsvExporting, setIsCsvExporting] = useState(false);
     const hasNativePrintModule = Boolean(requireOptionalNativeModule('ExpoPrint'));
     const hasNativeSharingModule = Boolean(requireOptionalNativeModule('ExpoSharing'));
 
@@ -387,6 +389,18 @@ export default function ReportsScreen() {
         </html>`;
     };
 
+    const handleExportCsv = async () => {
+        setIsCsvExporting(true);
+        try {
+            await shareTransactionsCsv(filteredTransactions);
+        } catch (error) {
+            logger.reports.error('CSV export failed', error);
+            feedback.error('CSV dışa aktarma başarısız.');
+        } finally {
+            setIsCsvExporting(false);
+        }
+    };
+
     const handleExportPdf = async () => {
         if (statementRows.length === 0) {
             feedback.info('PDF oluşturmak için seçili dönemde en az bir işlem olmalıdır.');
@@ -646,6 +660,19 @@ export default function ReportsScreen() {
                         <ReceiptText size={14} color={theme.primary} />
                         <Text style={[styles.sectionSubTitle, { color: theme.textSecondary }]}>Tarih bazlı hareketler</Text>
                     </View>
+                    <TouchableOpacity
+                        style={[
+                            styles.exportButton,
+                            { backgroundColor: isCsvExporting ? theme.border : theme.secondary },
+                        ]}
+                        onPress={handleExportCsv}
+                        disabled={isCsvExporting}
+                    >
+                        <Download size={14} color="#FFF" />
+                        <Text style={styles.exportButtonText}>
+                            {isCsvExporting ? '…' : 'CSV'}
+                        </Text>
+                    </TouchableOpacity>
                     <TouchableOpacity
                         style={[
                             styles.exportButton,
