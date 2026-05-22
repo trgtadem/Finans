@@ -3,6 +3,8 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { createFinancePersistStorage } from './financeStorage';
 import { remindersForCloud } from '../utils/cloudSnapshot';
 import { generateId } from '../utils/id';
+import { enrichReminderInput } from '../utils/reminderHelpers';
+import type { ReminderScheduleResult } from '../services/notifications/reminderNotifications';
 
 export type TransactionType = 'income' | 'expense';
 export type PaymentMethod = 'cash' | 'card';
@@ -22,7 +24,10 @@ export interface Reminder {
     note: string;
     date: string;
     time: string;
+    repeatMonthly?: boolean;
+    dayOfMonth?: number;
     notificationId?: string;
+    notificationIds?: string[];
 }
 
 const DEFAULT_INCOME_CATEGORIES = ['Maaş', 'Satış', 'Bonus', 'Faiz', 'Diğer'];
@@ -49,6 +54,9 @@ interface FinanceState {
     updateReminderNotificationId: (id: string, notificationId: string | undefined) => void;
     applyReminderNotificationIds: (
         updates: Array<{ id: string; notificationId?: string }>
+    ) => void;
+    applyReminderSchedules: (
+        updates: Array<{ id: string } & ReminderScheduleResult>
     ) => void;
     deleteReminder: (id: string) => Reminder | undefined;
     setReminders: (reminders: Reminder[]) => void;
@@ -145,8 +153,9 @@ export const useFinanceStore = create<FinanceState>()(
 
             addReminder: (reminder) => {
                 const id = generateId();
+                const enriched = enrichReminderInput(reminder);
                 set((state) => ({
-                    reminders: [...state.reminders, { ...reminder, id }],
+                    reminders: [...state.reminders, { ...enriched, id }],
                     hasPendingCloudSync: true,
                 }));
                 return id;
@@ -170,11 +179,40 @@ export const useFinanceStore = create<FinanceState>()(
                     };
                 }),
 
+            applyReminderSchedules: (updates) =>
+                set((state) => {
+                    if (updates.length === 0) return state;
+                    const map = new Map(updates.map((u) => [u.id, u]));
+                    return {
+                        reminders: state.reminders.map((r) => {
+                            const patch = map.get(r.id);
+                            if (!patch) return r;
+                            return {
+                                ...r,
+                                notificationId: patch.notificationId,
+                                notificationIds: patch.notificationIds,
+                            };
+                        }),
+                    };
+                }),
+
             updateReminder: (id, patch) =>
                 set((state) => ({
-                    reminders: state.reminders.map((r) =>
-                        r.id === id ? { ...r, ...patch } : r
-                    ),
+                    reminders: state.reminders.map((r) => {
+                        if (r.id !== id) return r;
+                        const next = { ...r, ...patch };
+                        if (patch.repeatMonthly != null || patch.date != null) {
+                            const merged = enrichReminderInput({
+                                note: next.note,
+                                date: next.date,
+                                time: next.time,
+                                repeatMonthly: next.repeatMonthly,
+                                dayOfMonth: next.dayOfMonth,
+                            });
+                            return { ...next, ...merged };
+                        }
+                        return next;
+                    }),
                     hasPendingCloudSync: true,
                 })),
 
@@ -280,7 +318,7 @@ export const useFinanceStore = create<FinanceState>()(
         {
             name: 'finance-storage',
             storage: createJSONStorage(() => createFinancePersistStorage()),
-            version: 5,
+            version: 6,
             partialize: (state) => ({
                 transactions: state.transactions,
                 reminders: state.reminders,
@@ -299,6 +337,8 @@ export const useFinanceStore = create<FinanceState>()(
                     reminders: (state.reminders ?? []).map((r) => ({
                         ...r,
                         time: r.time ?? '09:00',
+                        repeatMonthly: r.repeatMonthly ?? false,
+                        dayOfMonth: r.dayOfMonth,
                     })),
                 };
                 if (version < 3) {
@@ -321,6 +361,15 @@ export const useFinanceStore = create<FinanceState>()(
                     return {
                         ...migrated,
                         hasPendingCloudSync: migrated.hasPendingCloudSync ?? false,
+                    };
+                }
+                if (version < 6) {
+                    return {
+                        ...migrated,
+                        reminders: migrated.reminders.map((r) => ({
+                            ...r,
+                            repeatMonthly: r.repeatMonthly ?? false,
+                        })),
                     };
                 }
                 return migrated;

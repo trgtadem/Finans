@@ -24,7 +24,7 @@ export default function HomeScreen() {
     const reminders = useFinanceStore((s) => s.reminders);
     const monthlyExpenseBudget = useFinanceStore((s) => s.monthlyExpenseBudget);
     const totalBalance = useFinanceStore((s) => s.getTotalBalance());
-    const { theme } = useAppTheme();
+    const { theme, colorScheme } = useAppTheme();
     const recentTransactions = useMemo(() => transactions.slice(0, 5), [transactions]);
     const todayReminders = useMemo(() => getTodayReminders(reminders), [reminders]);
     const monthSummary = useMemo(
@@ -187,6 +187,7 @@ export default function HomeScreen() {
                                 </Text>
                                 <Text style={[styles.itemNote, { color: theme.textSecondary }]}>
                                     {r.time}
+                                    {r.repeatMonthly ? ' · Düzenli' : ''}
                                 </Text>
                             </View>
                         </View>
@@ -195,13 +196,28 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.quickActions}>
-                <Link href="/transaction/add" asChild>
+                <View style={styles.actionButtonShell}>
                     <TouchableOpacity
-                        style={[styles.actionButton, { backgroundColor: theme.primary }]}
+                        activeOpacity={0.82}
+                        onPress={() => router.push('/transaction/add')}
+                        style={[
+                            styles.actionButton,
+                            {
+                                backgroundColor: theme.primarySoft,
+                                borderColor: theme.primary,
+                                shadowColor: theme.primary,
+                                ...(colorScheme === 'dark'
+                                    ? styles.actionButtonDark
+                                    : styles.actionButtonLight),
+                            },
+                        ]}
                     >
-                        <Text style={styles.actionText}>İşlem Ekle</Text>
+                        <Plus size={22} color={theme.primary} strokeWidth={2.5} />
+                        <Text style={[styles.actionText, { color: theme.primary }]}>
+                            İşlem Ekle
+                        </Text>
                     </TouchableOpacity>
-                </Link>
+                </View>
             </View>
 
             <View style={styles.section}>
@@ -336,15 +352,43 @@ const styles = StyleSheet.create({
     quickActions: {
         paddingHorizontal: Spacing.lg,
         marginBottom: Spacing.lg,
+        width: '100%',
         alignItems: 'center',
     },
-    actionButton: {
-        paddingHorizontal: Spacing.lg,
-        paddingVertical: Spacing.md,
-        borderRadius: Radius.full,
-        elevation: 4,
+    actionButtonShell: {
+        width: '92%',
+        minWidth: 280,
+        maxWidth: 400,
+        alignSelf: 'center',
     },
-    actionText: { color: '#FFF', fontWeight: '700', fontSize: 16 },
+    actionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '100%',
+        height: 56,
+        paddingHorizontal: Spacing.xl,
+        borderRadius: Radius.sm,
+        borderWidth: 1.5,
+        gap: Spacing.md,
+        elevation: 2,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.12,
+        shadowRadius: 10,
+    },
+    actionButtonLight: {
+        borderWidth: 2,
+        shadowOpacity: 0.08,
+    },
+    actionButtonDark: {
+        borderWidth: 1.5,
+        shadowOpacity: 0.22,
+    },
+    actionText: {
+        fontWeight: '700',
+        fontSize: 17,
+        letterSpacing: 0.3,
+    },
     section: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xl },
     sectionHeader: {
         flexDirection: 'row',

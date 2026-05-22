@@ -8,12 +8,15 @@ import { setupNotifications } from '../src/utils/notifications';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFirebaseSync } from '../src/hooks/useFirebaseSync';
 import { useSyncLifecycle } from '../src/hooks/useSyncLifecycle';
+import { useAutoCloudUpload } from '../src/hooks/useAutoCloudUpload';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { isFirebaseConfigured } from '../src/config/firebase';
 import { FeedbackRoot } from '../src/components/feedback';
 import { migrateLegacyLocalPin } from '../src/store/useAuthStore';
 import { logCatch } from '../src/utils/logger';
 import { AppLockGate } from '../src/components/AppLockGate';
+import { useFinanceStore } from '../src/store/useFinanceStore';
+import { syncLocalReminderNotifications } from '../src/services/notifications/reconcileReminders';
 
 export default function RootLayout() {
     const { isAuthenticated, isLoading, initialize } = useAuthStore();
@@ -25,6 +28,7 @@ export default function RootLayout() {
 
     useFirebaseSync();
     useSyncLifecycle();
+    useAutoCloudUpload();
 
     useEffect(() => {
         migrateLegacyLocalPin().catch(logCatch('pin_migration'));
@@ -33,6 +37,28 @@ export default function RootLayout() {
         setIsReady(true);
         return unsubscribeAuth;
     }, [initialize]);
+
+    useEffect(() => {
+        if (!isAuthenticated) return;
+
+        const reconcile = async () => {
+            try {
+                const updates = await syncLocalReminderNotifications(
+                    useFinanceStore.getState().reminders
+                );
+                useFinanceStore.getState().applyReminderSchedules(updates);
+            } catch (e) {
+                logCatch('notifications')(e);
+            }
+        };
+
+        if (useFinanceStore.persist.hasHydrated()) {
+            reconcile();
+        }
+        return useFinanceStore.persist.onFinishHydration(() => {
+            reconcile();
+        });
+    }, [isAuthenticated]);
 
     useEffect(() => {
         if (!isReady || !navigationState?.key || isLoading) return;

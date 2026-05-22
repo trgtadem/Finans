@@ -3,7 +3,6 @@ import {
     View,
     Text,
     StyleSheet,
-    TextInput,
     TouchableOpacity,
     KeyboardAvoidingView,
     Platform,
@@ -12,24 +11,23 @@ import {
 } from 'react-native';
 import { useFinanceStore } from '../../src/store/useFinanceStore';
 import { Spacing, Radius } from '../../src/theme';
-import { Bell, Check, ArrowLeft, Clock } from 'lucide-react-native';
+import { Bell, Check, ArrowLeft } from 'lucide-react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { format, parseISO } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { useAppTheme } from '../../src/theme/useAppTheme';
 import {
-    scheduleReminderNotification,
-    cancelReminderNotification,
+    rescheduleReminder,
     DEFAULT_REMINDER_TIME,
 } from '../../src/services/notifications/reminderNotifications';
 import { feedback } from '../../src/components/feedback';
-
-const TIME_OPTIONS = ['08:00', '09:00', '12:00', '18:00', '20:00'];
+import { ReminderForm } from '../../src/components/ReminderForm';
+import { formatRepeatLabel } from '../../src/utils/reminderHelpers';
 
 export default function EditReminderScreen() {
     const router = useRouter();
     const params = useLocalSearchParams<{ id: string }>();
-    const { reminders, updateReminder, updateReminderNotificationId } = useFinanceStore();
+    const { reminders, updateReminder, applyReminderSchedules } = useFinanceStore();
     const { theme } = useAppTheme();
 
     const existing = useMemo(
@@ -39,6 +37,7 @@ export default function EditReminderScreen() {
 
     const [note, setNote] = useState(existing?.note ?? '');
     const [selectedTime, setSelectedTime] = useState(existing?.time ?? DEFAULT_REMINDER_TIME);
+    const [repeatMonthly, setRepeatMonthly] = useState(existing?.repeatMonthly ?? false);
     const [isSaving, setIsSaving] = useState(false);
 
     if (!existing) {
@@ -62,22 +61,17 @@ export default function EditReminderScreen() {
 
         setIsSaving(true);
         try {
-            if (existing.notificationId) {
-                await cancelReminderNotification(existing.notificationId);
-            }
-
             updateReminder(existing.id, {
                 note: note.trim(),
                 time: selectedTime,
+                repeatMonthly,
             });
 
-            const notificationId = await scheduleReminderNotification({
-                id: existing.id,
-                note: note.trim(),
-                date: existing.date,
-                time: selectedTime,
-            });
-            updateReminderNotificationId(existing.id, notificationId ?? undefined);
+            const updated = useFinanceStore.getState().reminders.find((r) => r.id === existing.id);
+            if (updated) {
+                const schedule = await rescheduleReminder(updated);
+                applyReminderSchedules([{ id: existing.id, ...schedule }]);
+            }
 
             feedback.success('Hatırlatıcı güncellendi.');
             router.back();
@@ -87,6 +81,14 @@ export default function EditReminderScreen() {
             setIsSaving(false);
         }
     };
+
+    const dateLabel = repeatMonthly
+        ? formatRepeatLabel({
+              ...existing,
+              repeatMonthly: true,
+              time: selectedTime,
+          })
+        : format(parseISO(existing.date), 'd MMMM yyyy', { locale: tr });
 
     return (
         <KeyboardAvoidingView
@@ -103,55 +105,18 @@ export default function EditReminderScreen() {
             <ScrollView contentContainerStyle={styles.content}>
                 <View style={[styles.dateBadge, { backgroundColor: theme.surface }]}>
                     <Bell size={20} color={theme.secondary} />
-                    <Text style={[styles.dateText, { color: theme.text }]}>
-                        {format(parseISO(existing.date), 'd MMMM yyyy', { locale: tr })}
-                    </Text>
+                    <Text style={[styles.dateText, { color: theme.text }]}>{dateLabel}</Text>
                 </View>
 
-                <Text style={[styles.label, { color: theme.textSecondary }]}>Not</Text>
-                <TextInput
-                    style={[
-                        styles.input,
-                        { color: theme.text, backgroundColor: theme.surface, borderColor: theme.border },
-                    ]}
-                    placeholder="Hatırlatma notu"
-                    placeholderTextColor={theme.textSecondary}
-                    value={note}
-                    onChangeText={setNote}
-                    multiline
+                <ReminderForm
+                    note={note}
+                    onNoteChange={setNote}
+                    time={selectedTime}
+                    onTimeChange={setSelectedTime}
+                    repeatMonthly={repeatMonthly}
+                    onRepeatMonthlyChange={setRepeatMonthly}
+                    date={existing.date}
                 />
-
-                <View style={styles.timeHeader}>
-                    <Clock size={18} color={theme.textSecondary} />
-                    <Text style={[styles.label, { color: theme.textSecondary, marginBottom: 0 }]}>
-                        Saat
-                    </Text>
-                </View>
-                <View style={styles.timeRow}>
-                    {TIME_OPTIONS.map((time) => (
-                        <TouchableOpacity
-                            key={time}
-                            style={[
-                                styles.timeChip,
-                                {
-                                    borderColor: theme.border,
-                                    backgroundColor:
-                                        selectedTime === time ? theme.primary : theme.surface,
-                                },
-                            ]}
-                            onPress={() => setSelectedTime(time)}
-                        >
-                            <Text
-                                style={{
-                                    color: selectedTime === time ? '#FFF' : theme.text,
-                                    fontWeight: '600',
-                                }}
-                            >
-                                {time}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
 
                 <TouchableOpacity
                     style={[styles.saveBtn, { backgroundColor: theme.primary }]}
@@ -184,7 +149,7 @@ const styles = StyleSheet.create({
     },
     backBtn: { padding: Spacing.xs, marginRight: Spacing.sm },
     title: { fontSize: 20, fontWeight: 'bold' },
-    content: { padding: Spacing.lg, gap: Spacing.md },
+    content: { padding: Spacing.lg, gap: Spacing.lg },
     dateBadge: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -192,24 +157,7 @@ const styles = StyleSheet.create({
         padding: Spacing.md,
         borderRadius: Radius.md,
     },
-    dateText: { fontSize: 16, fontWeight: '600' },
-    label: { fontSize: 14, marginBottom: Spacing.xs },
-    input: {
-        minHeight: 80,
-        borderWidth: 1,
-        borderRadius: Radius.md,
-        padding: Spacing.md,
-        fontSize: 16,
-        textAlignVertical: 'top',
-    },
-    timeHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
-    timeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-    timeChip: {
-        paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.sm,
-        borderRadius: 20,
-        borderWidth: 1,
-    },
+    dateText: { fontSize: 16, fontWeight: '600', flex: 1 },
     saveBtn: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -217,7 +165,7 @@ const styles = StyleSheet.create({
         gap: Spacing.sm,
         height: 50,
         borderRadius: Radius.md,
-        marginTop: Spacing.lg,
+        marginTop: Spacing.md,
     },
     saveBtnText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
     missing: { textAlign: 'center', margin: Spacing.xl },

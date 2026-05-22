@@ -2,11 +2,16 @@ import type { Reminder } from '../../store/useFinanceStore';
 import { getNotificationsModule } from './notificationsBridge';
 import {
     scheduleReminderNotification,
-    cancelReminderNotification,
+    cancelReminderNotifications,
+    type ReminderScheduleResult,
 } from './reminderNotifications';
+import { shouldScheduleReminderNotification } from '../../utils/reminderHelpers';
 
-/** OS bildirimlerini hatırlatıcı listesine göre yeniler; store / Firestore güncellemez. */
-export async function syncLocalReminderNotifications(reminders: Reminder[]): Promise<void> {
+export type ReminderNotificationUpdate = {
+    id: string;
+} & ReminderScheduleResult;
+
+async function cancelAllReminderTypeNotifications(): Promise<void> {
     const Notifications = await getNotificationsModule();
     if (!Notifications) return;
 
@@ -18,14 +23,32 @@ export async function syncLocalReminderNotifications(reminders: Reminder[]): Pro
             }
         }
     } catch {
-        return;
+        // ignore
     }
+}
+
+/** OS bildirimlerini hatırlatıcı listesine göre yeniler; güncellenmiş ID listesini döner. */
+export async function syncLocalReminderNotifications(
+    reminders: Reminder[]
+): Promise<ReminderNotificationUpdate[]> {
+    const Notifications = await getNotificationsModule();
+    if (!Notifications) return [];
+
+    await cancelAllReminderTypeNotifications();
+
+    const updates: ReminderNotificationUpdate[] = [];
 
     for (const reminder of reminders) {
-        await cancelReminderNotification(reminder.notificationId);
-        await scheduleReminderNotification({
-            ...reminder,
-            notificationId: undefined,
-        });
+        await cancelReminderNotifications(reminder);
+
+        if (!shouldScheduleReminderNotification(reminder)) {
+            updates.push({ id: reminder.id, notificationId: undefined, notificationIds: undefined });
+            continue;
+        }
+
+        const result = await scheduleReminderNotification(reminder);
+        updates.push({ id: reminder.id, ...result });
     }
+
+    return updates;
 }

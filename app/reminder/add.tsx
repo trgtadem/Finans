@@ -3,7 +3,6 @@ import {
     View,
     Text,
     StyleSheet,
-    TextInput,
     TouchableOpacity,
     KeyboardAvoidingView,
     Platform,
@@ -12,7 +11,7 @@ import {
 } from 'react-native';
 import { useFinanceStore } from '../../src/store/useFinanceStore';
 import { Spacing, Radius } from '../../src/theme';
-import { Bell, Check, ArrowLeft, Clock } from 'lucide-react-native';
+import { Bell, Check, ArrowLeft } from 'lucide-react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { format, parseISO } from 'date-fns';
 import { tr } from 'date-fns/locale';
@@ -22,17 +21,18 @@ import {
     DEFAULT_REMINDER_TIME,
 } from '../../src/services/notifications/reminderNotifications';
 import { feedback } from '../../src/components/feedback';
-
-const TIME_OPTIONS = ['08:00', '09:00', '12:00', '18:00', '20:00'];
+import { ReminderForm } from '../../src/components/ReminderForm';
+import { formatRepeatLabel } from '../../src/utils/reminderHelpers';
 
 export default function AddReminderScreen() {
     const router = useRouter();
     const params = useLocalSearchParams<{ date: string }>();
-    const { addReminder, updateReminderNotificationId } = useFinanceStore();
+    const { addReminder, applyReminderSchedules } = useFinanceStore();
     const { theme } = useAppTheme();
 
     const [note, setNote] = useState('');
     const [selectedTime, setSelectedTime] = useState(DEFAULT_REMINDER_TIME);
+    const [repeatMonthly, setRepeatMonthly] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
 
     const reminderDate = params.date;
@@ -50,20 +50,16 @@ export default function AddReminderScreen() {
                 note: note.trim(),
                 date: reminderDate,
                 time: selectedTime,
+                repeatMonthly,
             });
 
-            const reminder = {
-                id: reminderId,
-                note: note.trim(),
-                date: reminderDate,
-                time: selectedTime,
-                notificationId: undefined as string | undefined,
-            };
+            const reminder = useFinanceStore
+                .getState()
+                .reminders.find((r) => r.id === reminderId);
 
-            const notificationId = await scheduleReminderNotification(reminder);
-            if (notificationId) {
-                updateReminderNotificationId(reminderId, notificationId);
-                reminder.notificationId = notificationId;
+            if (reminder) {
+                const schedule = await scheduleReminderNotification(reminder);
+                applyReminderSchedules([{ id: reminderId, ...schedule }]);
             }
 
             feedback.success('Hatırlatıcı kaydedildi.');
@@ -76,6 +72,17 @@ export default function AddReminderScreen() {
         }
     };
 
+    const dateLabel = repeatMonthly
+        ? formatRepeatLabel({
+              id: '',
+              note: '',
+              date: reminderDate,
+              time: selectedTime,
+              repeatMonthly: true,
+              dayOfMonth: parseISO(reminderDate).getDate(),
+          })
+        : format(parseISO(reminderDate), 'd MMMM yyyy', { locale: tr });
+
     return (
         <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -86,11 +93,7 @@ export default function AddReminderScreen() {
                     <ArrowLeft size={24} color={theme.text} />
                 </TouchableOpacity>
                 <Text style={[styles.headerTitle, { color: theme.text }]}>Hatırlatıcı Ekle</Text>
-                <TouchableOpacity
-                    style={styles.saveBtn}
-                    onPress={handleSave}
-                    disabled={isSaving}
-                >
+                <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={isSaving}>
                     {isSaving ? (
                         <ActivityIndicator color={theme.primary} />
                     ) : (
@@ -103,68 +106,19 @@ export default function AddReminderScreen() {
                 <View style={styles.dateInfo}>
                     <Bell size={20} color={theme.primary} />
                     <Text style={[styles.dateText, { color: theme.textSecondary }]}>
-                        {format(parseISO(reminderDate), 'd MMMM yyyy', { locale: tr })} için hatırlatıcı
+                        {repeatMonthly ? `${dateLabel} — ${selectedTime}` : `${dateLabel} için hatırlatıcı`}
                     </Text>
                 </View>
 
-                <View style={styles.inputGroup}>
-                    <Text style={[styles.label, { color: theme.textSecondary }]}>Hatırlatılacak Not</Text>
-                    <View style={[styles.inputWrapper, { backgroundColor: theme.surface }]}>
-                        <TextInput
-                            style={[styles.input, { color: theme.text }]}
-                            placeholder="Örn: Kira ödemesi yapılacak"
-                            placeholderTextColor={theme.textSecondary}
-                            multiline
-                            autoFocus
-                            value={note}
-                            onChangeText={setNote}
-                            maxLength={100}
-                        />
-                    </View>
-                    <Text style={[styles.charCount, { color: theme.textSecondary }]}>
-                        {note.length}/100
-                    </Text>
-                </View>
-
-                <View style={styles.inputGroup}>
-                    <View style={styles.timeLabelRow}>
-                        <Clock size={16} color={theme.textSecondary} />
-                        <Text style={[styles.label, { color: theme.textSecondary, marginBottom: 0 }]}>
-                            Bildirim Saati
-                        </Text>
-                    </View>
-                    <View style={styles.timeOptions}>
-                        {TIME_OPTIONS.map((time) => (
-                            <TouchableOpacity
-                                key={time}
-                                style={[
-                                    styles.timeChip,
-                                    {
-                                        backgroundColor:
-                                            selectedTime === time
-                                                ? theme.primary
-                                                : theme.surface,
-                                    },
-                                ]}
-                                onPress={() => setSelectedTime(time)}
-                            >
-                                <Text
-                                    style={[
-                                        styles.timeChipText,
-                                        {
-                                            color:
-                                                selectedTime === time
-                                                    ? '#FFF'
-                                                    : theme.text,
-                                        },
-                                    ]}
-                                >
-                                    {time}
-                                </Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                </View>
+                <ReminderForm
+                    note={note}
+                    onNoteChange={setNote}
+                    time={selectedTime}
+                    onTimeChange={setSelectedTime}
+                    repeatMonthly={repeatMonthly}
+                    onRepeatMonthlyChange={setRepeatMonthly}
+                    date={reminderDate}
+                />
 
                 <TouchableOpacity
                     style={[
@@ -184,9 +138,7 @@ export default function AddReminderScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
+    container: { flex: 1 },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -196,75 +148,17 @@ const styles = StyleSheet.create({
         paddingHorizontal: Spacing.md,
         borderBottomWidth: 1,
     },
-    backBtn: {
-        padding: 4,
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
-    saveBtn: {
-        padding: 4,
-        minWidth: 32,
-        alignItems: 'center',
-    },
-    scrollContent: {
-        padding: Spacing.lg,
-    },
+    backBtn: { padding: 4 },
+    headerTitle: { fontSize: 18, fontWeight: 'bold' },
+    saveBtn: { padding: 4, minWidth: 32, alignItems: 'center' },
+    scrollContent: { padding: Spacing.lg },
     dateInfo: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: Spacing.sm,
         marginBottom: Spacing.xl,
     },
-    dateText: {
-        fontSize: 16,
-    },
-    inputGroup: {
-        marginBottom: Spacing.xl,
-    },
-    label: {
-        fontSize: 14,
-        fontWeight: '600',
-        marginBottom: Spacing.sm,
-        marginLeft: 4,
-    },
-    timeLabelRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.sm,
-        marginBottom: Spacing.sm,
-    },
-    timeOptions: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: Spacing.sm,
-    },
-    timeChip: {
-        paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.sm,
-        borderRadius: Radius.lg,
-    },
-    timeChipText: {
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    inputWrapper: {
-        borderRadius: Radius.lg,
-        padding: Spacing.md,
-        minHeight: 120,
-        elevation: 2,
-    },
-    input: {
-        fontSize: 16,
-        textAlignVertical: 'top',
-    },
-    charCount: {
-        fontSize: 12,
-        textAlign: 'right',
-        marginTop: 4,
-        marginRight: 4,
-    },
+    dateText: { fontSize: 16, flex: 1 },
     mainButton: {
         height: 55,
         borderRadius: Radius.xl,
@@ -273,9 +167,5 @@ const styles = StyleSheet.create({
         marginTop: Spacing.md,
         elevation: 3,
     },
-    mainButtonText: {
-        color: '#FFF',
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
+    mainButtonText: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
 });

@@ -28,13 +28,25 @@ async function canUploadNow(): Promise<boolean> {
     return state.type === 'wifi' || state.type === 'ethernet';
 }
 
+export type PendingSyncReason = 'offline' | 'wifi';
+
+/** Bekleyen yedekleme neden yapılamıyor; null = yükleme mümkün. */
+export async function getPendingSyncReason(): Promise<PendingSyncReason | null> {
+    if (!(await isOnline())) return 'offline';
+    if (!(await canUploadNow())) return 'wifi';
+    return null;
+}
+
 async function reconcileNotificationsAfterPull() {
     const reconcile = useAppSettingsStore.getState().reconcileNotificationsOnRemoteSync;
     if (!reconcile) return;
     const { syncLocalReminderNotifications } = await import(
         '../notifications/reconcileReminders'
     );
-    await syncLocalReminderNotifications(useFinanceStore.getState().reminders);
+    const updates = await syncLocalReminderNotifications(
+        useFinanceStore.getState().reminders
+    );
+    useFinanceStore.getState().applyReminderSchedules(updates);
 }
 
 /** Buluttan tek seferlik indirme → yerel önbellek */
@@ -91,9 +103,6 @@ export async function flushFullCloudSync(options?: { force?: boolean }): Promise
     if (!options?.force && !store.hasPendingCloudSync) return;
 
     if (!(await canUploadNow())) {
-        if (store.hasPendingCloudSync) {
-            store.setSyncError('Yedekleme için internet (veya Wi‑Fi) gerekli.');
-        }
         return;
     }
 

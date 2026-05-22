@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { useFinanceStore } from '../../src/store/useFinanceStore';
-import { cancelReminderNotification } from '../../src/services/notifications/reminderNotifications';
+import { cancelReminderNotifications } from '../../src/services/notifications/reminderNotifications';
+import { reminderMatchesDate, reminderDateKeyForMonth } from '../../src/utils/reminderHelpers';
 import { Spacing, Radius } from '../../src/theme';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
 import { format, isSameDay, parseISO } from 'date-fns';
@@ -27,6 +28,7 @@ export default function CalendarScreen() {
     const { theme, colorScheme } = useAppTheme();
     const lowPowerMode = useAppSettingsStore((s) => s.lowPowerMode);
     const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+    const [visibleMonth, setVisibleMonth] = useState(format(new Date(), 'yyyy-MM'));
 
     const iconBackgrounds = useMemo(
         () => ({
@@ -49,7 +51,10 @@ export default function CalendarScreen() {
             });
 
             reminders.forEach((r) => {
-                const dateKey = r.date;
+                const dateKey =
+                    r.repeatMonthly && r.dayOfMonth != null
+                        ? reminderDateKeyForMonth(visibleMonth, r.dayOfMonth)
+                        : r.date;
                 if (!marks[dateKey]) {
                     marks[dateKey] = { marked: true, dotColor: theme.success };
                 } else {
@@ -64,7 +69,7 @@ export default function CalendarScreen() {
             selectedColor: theme.primary,
         };
         return marks;
-    }, [transactions, reminders, selectedDate, theme.primary, theme.success, lowPowerMode]);
+    }, [transactions, reminders, selectedDate, visibleMonth, theme.primary, theme.success, lowPowerMode]);
 
     const dayItems = useMemo(() => {
         const dayTransactions = transactions
@@ -72,8 +77,8 @@ export default function CalendarScreen() {
             .map(t => ({ ...t, itemType: 'transaction' }));
 
         const dayReminders = reminders
-            .filter(r => r.date === selectedDate)
-            .map(r => ({ ...r, itemType: 'reminder' }));
+            .filter((r) => reminderMatchesDate(r, selectedDate))
+            .map((r) => ({ ...r, itemType: 'reminder' }));
 
         return [...dayTransactions, ...dayReminders];
     }, [transactions, reminders, selectedDate]);
@@ -84,8 +89,8 @@ export default function CalendarScreen() {
 
     const handleDeleteReminder = async (id: string) => {
         const removed = deleteReminder(id);
-        if (removed?.notificationId) {
-            await cancelReminderNotification(removed.notificationId);
+        if (removed) {
+            await cancelReminderNotifications(removed);
         }
     };
 
@@ -112,7 +117,10 @@ export default function CalendarScreen() {
         <View style={[styles.container, { backgroundColor: theme.background }]}>
             <Calendar
                 style={[styles.calendar, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}
-                onDayPress={(day: any) => setSelectedDate(day.dateString)}
+                onDayPress={(day: { dateString: string }) => setSelectedDate(day.dateString)}
+                onMonthChange={(month: { dateString: string }) =>
+                    setVisibleMonth(month.dateString.slice(0, 7))
+                }
                 markedDates={markedDates}
                 theme={{
                     backgroundColor: theme.background,

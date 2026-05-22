@@ -49,7 +49,8 @@
         {
           "faceIDPermission": "Finans uygulamasını güvenli şekilde açmak için Face ID kullanılır."
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "notification": {
       "icon": "./assets/icon.png",

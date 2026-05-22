@@ -1,6 +1,7 @@
 import { format, startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import type { Reminder, Transaction } from '../store/useFinanceStore';
+import { reminderMatchesDate } from './reminderHelpers';
 
 export function todayKey(date = new Date()): string {
     return format(date, 'yyyy-MM-dd');
@@ -9,7 +10,7 @@ export function todayKey(date = new Date()): string {
 export function getTodayReminders(reminders: Reminder[], date = new Date()): Reminder[] {
     const key = todayKey(date);
     return reminders
-        .filter((r) => r.date === key)
+        .filter((r) => reminderMatchesDate(r, key))
         .sort((a, b) => a.time.localeCompare(b.time));
 }
 

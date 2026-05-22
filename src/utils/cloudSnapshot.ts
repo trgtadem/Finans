@@ -2,7 +2,7 @@ import type { Reminder } from '../store/useFinanceStore';
 
 /** Bildirim kimlikleri cihaza özel; buluta gönderilmez. */
 export function remindersForCloud(reminders: Reminder[]) {
-    return reminders.map(({ notificationId: _nid, ...r }) => r);
+    return reminders.map(({ notificationId: _nid, notificationIds: _nids, ...r }) => r);
 }
 
 export type CloudSnapshotPayload = {

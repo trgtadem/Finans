@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Cloud, CloudOff, RefreshCw, Clock } from 'lucide-react-native';
 import { format } from 'date-fns';
@@ -10,6 +10,10 @@ import { Spacing, Radius } from '../theme';
 import { isFirebaseConfigured } from '../config/firebase';
 import { syncNowUpload } from '../hooks/useFirebaseSync';
 import { logCatch } from '../utils/logger';
+import {
+    getPendingSyncReason,
+    type PendingSyncReason,
+} from '../services/sync/cloudSync';
 
 export function SyncStatusBanner() {
     const syncError = useFinanceStore((s) => s.syncError);
@@ -20,6 +24,23 @@ export function SyncStatusBanner() {
     const authMode = useAuthStore((s) => s.authMode);
     const user = useAuthStore((s) => s.user);
     const { theme } = useAppTheme();
+    const [pendingReason, setPendingReason] = useState<PendingSyncReason | null>(null);
+
+    useEffect(() => {
+        if (!hasPendingCloudSync || isSyncing || syncError) {
+            setPendingReason(null);
+            return;
+        }
+
+        let cancelled = false;
+        getPendingSyncReason().then((reason) => {
+            if (!cancelled) setPendingReason(reason);
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [hasPendingCloudSync, isSyncing, syncError]);
 
     if (!isFirebaseConfigured() || authMode !== 'firebase' || !user?.uid) {
         return null;
@@ -31,13 +52,17 @@ export function SyncStatusBanner() {
     const statusText = syncError
         ? syncError
         : isSyncing
-          ? 'Kaydediliyor…'
+          ? 'Buluta yedekleniyor…'
           : hasPendingCloudSync
-            ? 'Buluta yedeklenmedi'
+            ? pendingReason === 'offline'
+              ? 'Çevrimdışı — yedekleme sırada'
+              : pendingReason === 'wifi'
+                ? 'Wi‑Fi bekleniyor — yedekleme sırada'
+                : 'Yedekleme bekliyor…'
             : '';
 
     const subText =
-        !syncError && lastSyncAt
+        syncError && lastSyncAt
             ? `Son senkron: ${format(new Date(lastSyncAt), 'd MMM HH:mm', { locale: tr })}`
             : null;
 
