@@ -39,7 +39,10 @@ export default function HomeScreen() {
     };
 
     return (
-        <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>
+        <ScrollView
+            style={[styles.container, { backgroundColor: theme.background }]}
+            showsVerticalScrollIndicator={false}
+        >
             <View style={styles.header}>
                 <View
                     style={[

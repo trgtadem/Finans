@@ -1,5 +1,6 @@
 import { Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { useAuthStore } from '../src/store/useAuthStore';
 import { useRouter, useSegments, useRootNavigationState } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -9,14 +10,20 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFirebaseSync } from '../src/hooks/useFirebaseSync';
 import { useSyncLifecycle } from '../src/hooks/useSyncLifecycle';
 import { useAutoCloudUpload } from '../src/hooks/useAutoCloudUpload';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { isFirebaseConfigured } from '../src/config/firebase';
 import { FeedbackRoot } from '../src/components/feedback';
 import { migrateLegacyLocalPin } from '../src/store/useAuthStore';
 import { logCatch } from '../src/utils/logger';
 import { AppLockGate } from '../src/components/AppLockGate';
 import { useFinanceStore } from '../src/store/useFinanceStore';
 import { syncLocalReminderNotifications } from '../src/services/notifications/reconcileReminders';
+import { BrandSplash } from '../src/components/brand/BrandSplash';
+import { BRAND_BLUE } from '../src/components/brand/BrandMark';
+import { useAppBootGate } from '../src/hooks/useAppBootGate';
+import * as SplashScreen from 'expo-splash-screen';
+
+SplashScreen.preventAutoHideAsync().catch(() => {
+    // ignore — already hidden or native splash unavailable
+});
 
 export default function RootLayout() {
     const { isAuthenticated, isLoading, initialize } = useAuthStore();
@@ -25,6 +32,8 @@ export default function RootLayout() {
     const navigationState = useRootNavigationState();
     const { colorScheme, theme } = useAppTheme();
     const [isReady, setIsReady] = useState(false);
+    const [splashGone, setSplashGone] = useState(false);
+    const { canEnterApp, onAnimationFinished } = useAppBootGate(isReady, isLoading);
 
     useFirebaseSync();
     useSyncLifecycle();
@@ -61,7 +70,7 @@ export default function RootLayout() {
     }, [isAuthenticated]);
 
     useEffect(() => {
-        if (!isReady || !navigationState?.key || isLoading) return;
+        if (!canEnterApp || !navigationState?.key) return;
 
         const inAuthGroup = segments[0] === '(auth)';
 
@@ -70,63 +79,78 @@ export default function RootLayout() {
         } else if (isAuthenticated && inAuthGroup) {
             router.replace('/(tabs)');
         }
-    }, [isAuthenticated, segments, navigationState?.key, isReady, isLoading]);
+    }, [isAuthenticated, segments, navigationState?.key, canEnterApp, router]);
 
-    if (!isReady || (isFirebaseConfigured() && isLoading)) {
-        return (
-            <View style={[styles.loading, { backgroundColor: theme.background }]}>
-                <ActivityIndicator size="large" color={theme.primary} />
-            </View>
-        );
-    }
+    const showApp = canEnterApp;
+    const showSplash = !splashGone;
 
     return (
-        <GestureHandlerRootView style={{ flex: 1 }}>
-            <AppLockGate>
-            <Stack
-                screenOptions={{
-                    headerShown: false,
-                    contentStyle: { backgroundColor: theme.background },
-                }}
-            >
-                <Stack.Screen name="index" options={{ headerShown: false }} />
-                <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                <Stack.Screen
-                    name="transaction/add"
-                    options={{
-                        presentation: 'modal',
-                        headerShown: true,
-                        title: 'Yeni İşlem',
-                        headerStyle: { backgroundColor: theme.surface },
-                        headerTitleStyle: { color: theme.text },
-                        headerTintColor: theme.primary,
-                    }}
+        <GestureHandlerRootView
+            style={[
+                styles.root,
+                { backgroundColor: showApp ? theme.background : BRAND_BLUE },
+            ]}
+        >
+            {showApp && (
+                <View style={[styles.appLayer, { backgroundColor: theme.background }]}>
+                    <AppLockGate>
+                        <Stack
+                            screenOptions={{
+                                headerShown: false,
+                                animation: 'fade',
+                                contentStyle: { backgroundColor: theme.background },
+                            }}
+                        >
+                            <Stack.Screen name="index" options={{ headerShown: false }} />
+                            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+                            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                            <Stack.Screen
+                                name="transaction/add"
+                                options={{
+                                    presentation: 'modal',
+                                    headerShown: true,
+                                    title: 'Yeni İşlem',
+                                    headerStyle: { backgroundColor: theme.surface },
+                                    headerTitleStyle: { color: theme.text },
+                                    headerTintColor: theme.primary,
+                                }}
+                            />
+                            <Stack.Screen
+                                name="transaction/edit"
+                                options={{
+                                    presentation: 'modal',
+                                    headerShown: true,
+                                    title: 'İşlemi Düzenle',
+                                    headerStyle: { backgroundColor: theme.surface },
+                                    headerTitleStyle: { color: theme.text },
+                                    headerTintColor: theme.primary,
+                                }}
+                            />
+                        </Stack>
+                    </AppLockGate>
+                    <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+                    <FeedbackRoot />
+                </View>
+            )}
+
+            {showSplash && (
+                <BrandSplash
+                    onAnimationFinished={onAnimationFinished}
+                    fadingOut={canEnterApp}
+                    onFadeOutComplete={() => setSplashGone(true)}
                 />
-                <Stack.Screen
-                    name="transaction/edit"
-                    options={{
-                        presentation: 'modal',
-                        headerShown: true,
-                        title: 'İşlemi Düzenle',
-                        headerStyle: { backgroundColor: theme.surface },
-                        headerTitleStyle: { color: theme.text },
-                        headerTintColor: theme.primary,
-                    }}
-                />
-            </Stack>
-            </AppLockGate>
-            <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-            <FeedbackRoot />
+            )}
+
+            {!showApp && <StatusBar style="light" />}
         </GestureHandlerRootView>
     );
 }
 
 const styles = StyleSheet.create({
-    loading: {
+    root: {
         flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        gap: 12,
+    },
+    appLayer: {
+        flex: 1,
     },
 });
