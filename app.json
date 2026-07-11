@@ -9,13 +9,18 @@
     "newArchEnabled": true,
     "scheme": "finans",
     "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
+      "image": "./assets/splash-solid.png",
+      "resizeMode": "native",
       "backgroundColor": "#2D6CDF"
     },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.finans.android",
+      "splash": {
+        "image": "./assets/splash-solid.png",
+        "resizeMode": "native",
+        "backgroundColor": "#2D6CDF"
+      },
       "infoPlist": {
         "NSFaceIDUsageDescription": "Finans uygulamasını güvenli şekilde açmak için Face ID kullanılır."
       }
@@ -23,6 +28,11 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#2D6CDF"
+      },
+      "splash": {
+        "image": "./assets/splash-solid.png",
+        "resizeMode": "native",
         "backgroundColor": "#2D6CDF"
       },
       "edgeToEdgeEnabled": true,
@@ -35,6 +45,15 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#2D6CDF",
+          "image": "./assets/splash-solid.png",
+          "imageWidth": 1,
+          "resizeMode": "native"
+        }
+      ],
       [
         "expo-notifications",
         {

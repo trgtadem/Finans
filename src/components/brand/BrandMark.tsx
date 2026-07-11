@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import Svg, { Circle, Path, Rect, G, Defs, Filter, FeDropShadow } from 'react-native-svg';
+import Svg, { Circle, Path, Rect, G } from 'react-native-svg';
 import Animated, { useAnimatedProps, type SharedValue } from 'react-native-reanimated';
 
 const AnimatedRect = Animated.createAnimatedComponent(Rect);
@@ -105,19 +105,8 @@ export function BrandMark({ size = 180, progress }: Props) {
             accessibilityLabel="Finans"
         >
             <Svg width={size} height={size} viewBox={`0 0 ${VB} ${VB}`}>
-                <Defs>
-                    <Filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
-                        <FeDropShadow
-                            dx="0"
-                            dy="2"
-                            stdDeviation="1.5"
-                            floodColor="#000"
-                            floodOpacity="0.25"
-                        />
-                    </Filter>
-                </Defs>
                 <Rect x={0} y={0} width={VB} height={VB} rx={22} ry={22} fill={BRAND_BLUE} />
-                <AnimatedG animatedProps={groupProps} filter="url(#softShadow)">
+                <AnimatedG animatedProps={groupProps}>
                     <AnimatedRect
                         x={20}
                         width={11}
@@ -181,19 +170,8 @@ export function BrandMarkStatic({ size = 180 }: { size?: number }) {
             accessibilityLabel="Finans"
         >
             <Svg width={size} height={size} viewBox={`0 0 ${VB} ${VB}`}>
-                <Defs>
-                    <Filter id="softShadowStatic" x="-20%" y="-20%" width="140%" height="140%">
-                        <FeDropShadow
-                            dx="0"
-                            dy="2"
-                            stdDeviation="1.5"
-                            floodColor="#000"
-                            floodOpacity="0.25"
-                        />
-                    </Filter>
-                </Defs>
                 <Rect x={0} y={0} width={VB} height={VB} rx={22} ry={22} fill={BRAND_BLUE} />
-                <G filter="url(#softShadowStatic)">
+                <G>
                     <Rect x={20} y={48} width={11} height={30} rx={1.5} fill={BRAND_WHITE} />
                     <Rect x={35} y={34} width={11} height={44} rx={1.5} fill={BRAND_WHITE} />
                     <Rect x={50} y={20} width={13} height={58} rx={1.5} fill={BRAND_WHITE} />

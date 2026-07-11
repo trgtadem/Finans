@@ -15,13 +15,15 @@ import { logCatch } from '../../utils/logger';
 
 type Props = {
     onAnimationFinished: () => void;
-    /** true olduğunda splash opacity ile kaybolur */
     fadingOut?: boolean;
     onFadeOutComplete?: () => void;
 };
 
 const EASE = Easing.out(Easing.cubic);
-const FADE_OUT_MS = 420;
+/** Kısa fade — algılanabilir ama startup’a az ekler */
+const FADE_OUT_MS = 260;
+/** Intro bitiş (ms) — önceki ~1650ms idi */
+const INTRO_DONE_MS = 980;
 
 export function BrandSplash({
     onAnimationFinished,
@@ -37,10 +39,10 @@ export function BrandSplash({
     const settle = useSharedValue(1);
     const screenOpacity = useSharedValue(1);
 
-    const [motionReady, setMotionReady] = useState(false);
     const [reduceMotion, setReduceMotion] = useState(false);
     const finishedRef = React.useRef(false);
     const fadeDoneRef = React.useRef(false);
+    const startedRef = React.useRef(false);
 
     const progress: BrandMarkProgress = { bar1, bar2, bar3, line, arms, dot, settle };
 
@@ -56,67 +58,60 @@ export function BrandSplash({
         onFadeOutComplete?.();
     }, [onFadeOutComplete]);
 
+    // Native solid-blue splash → JS aynı mavi; hemen gizle, animasyona başla
     useEffect(() => {
         SplashScreen.hideAsync().catch(logCatch('general'));
     }, []);
 
     useEffect(() => {
-        let cancelled = false;
         AccessibilityInfo.isReduceMotionEnabled()
             .then((enabled) => {
-                if (!cancelled) {
-                    setReduceMotion(enabled);
-                    setMotionReady(true);
-                }
+                if (enabled) setReduceMotion(true);
             })
-            .catch(() => {
-                if (!cancelled) {
-                    setReduceMotion(false);
-                    setMotionReady(true);
-                }
-            });
-        return () => {
-            cancelled = true;
-        };
+            .catch(() => {});
     }, []);
 
+    // Animasyonu AccessibilityInfo beklemeden hemen başlat
     useEffect(() => {
-        if (!motionReady) return;
+        if (startedRef.current) return;
+        startedRef.current = true;
 
-        if (reduceMotion) {
-            bar1.value = 1;
-            bar2.value = 1;
-            bar3.value = 1;
-            line.value = 1;
-            arms.value = 1;
-            dot.value = 1;
-            settle.value = 1;
-            const t = setTimeout(finish, 280);
-            return () => clearTimeout(t);
-        }
-
-        bar1.value = withTiming(1, { duration: 450, easing: EASE });
-        line.value = withDelay(200, withTiming(1, { duration: 700, easing: EASE }));
-        dot.value = withDelay(550, withTiming(1, { duration: 400, easing: EASE }));
-        bar2.value = withDelay(350, withTiming(1, { duration: 600, easing: EASE }));
-        bar3.value = withDelay(550, withTiming(1, { duration: 650, easing: EASE }));
-        arms.value = withDelay(650, withTiming(1, { duration: 550, easing: EASE }));
+        bar1.value = withTiming(1, { duration: 280, easing: EASE });
+        line.value = withDelay(80, withTiming(1, { duration: 420, easing: EASE }));
+        dot.value = withDelay(280, withTiming(1, { duration: 240, easing: EASE }));
+        bar2.value = withDelay(160, withTiming(1, { duration: 360, easing: EASE }));
+        bar3.value = withDelay(280, withTiming(1, { duration: 400, easing: EASE }));
+        arms.value = withDelay(340, withTiming(1, { duration: 340, easing: EASE }));
         settle.value = withDelay(
-            1200,
+            720,
             withSequence(
-                withTiming(1.03, { duration: 200, easing: EASE }),
-                withTiming(1, { duration: 200, easing: EASE })
+                withTiming(1.02, { duration: 120, easing: EASE }),
+                withTiming(1, { duration: 120, easing: EASE })
             )
         );
 
-        const t = setTimeout(finish, 1650);
+        const t = setTimeout(finish, INTRO_DONE_MS);
         return () => clearTimeout(t);
-    }, [motionReady, reduceMotion, bar1, bar2, bar3, line, arms, dot, settle, finish]);
+    }, [bar1, bar2, bar3, line, arms, dot, settle, finish]);
+
+    // Reduce motion sonradan gelirse kısalt
+    useEffect(() => {
+        if (!reduceMotion) return;
+        bar1.value = 1;
+        bar2.value = 1;
+        bar3.value = 1;
+        line.value = 1;
+        arms.value = 1;
+        dot.value = 1;
+        settle.value = 1;
+        const t = setTimeout(finish, 120);
+        return () => clearTimeout(t);
+    }, [reduceMotion, bar1, bar2, bar3, line, arms, dot, settle, finish]);
 
     useEffect(() => {
         if (!fadingOut) return;
 
-        const duration = reduceMotion ? 160 : FADE_OUT_MS;
+        const duration = reduceMotion ? 120 : FADE_OUT_MS;
         screenOpacity.value = withTiming(0, { duration, easing: EASE }, (finished) => {
             if (finished) {
                 runOnJS(completeFade)();
@@ -136,7 +131,7 @@ export function BrandSplash({
             accessibilityRole="progressbar"
         >
             <View style={styles.center}>
-                {!motionReady ? null : reduceMotion ? (
+                {reduceMotion ? (
                     <BrandMarkStatic size={188} />
                 ) : (
                     <BrandMark size={188} progress={progress} />

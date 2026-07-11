@@ -20,10 +20,10 @@ import { BrandSplash } from '../src/components/brand/BrandSplash';
 import { BRAND_BLUE } from '../src/components/brand/BrandMark';
 import { useAppBootGate } from '../src/hooks/useAppBootGate';
 import * as SplashScreen from 'expo-splash-screen';
+import * as SystemUI from 'expo-system-ui';
 
-SplashScreen.preventAutoHideAsync().catch(() => {
-    // ignore — already hidden or native splash unavailable
-});
+SplashScreen.preventAutoHideAsync().catch(() => {});
+SystemUI.setBackgroundColorAsync(BRAND_BLUE).catch(() => {});
 
 export default function RootLayout() {
     const { isAuthenticated, isLoading, initialize } = useAuthStore();
@@ -42,13 +42,19 @@ export default function RootLayout() {
     useEffect(() => {
         migrateLegacyLocalPin().catch(logCatch('pin_migration'));
         const unsubscribeAuth = initialize();
-        setupNotifications().catch(logCatch('notifications'));
         setIsReady(true);
         return unsubscribeAuth;
     }, [initialize]);
 
+    // Bildirim kurulumu — splash sonrası (ilk frame’i bloklamaz)
     useEffect(() => {
-        if (!isAuthenticated) return;
+        if (!splashGone) return;
+        setupNotifications().catch(logCatch('notifications'));
+    }, [splashGone]);
+
+    // Hatırlatıcı reconcile — UI açıldıktan sonra
+    useEffect(() => {
+        if (!splashGone || !isAuthenticated) return;
 
         const reconcile = async () => {
             try {
@@ -61,13 +67,18 @@ export default function RootLayout() {
             }
         };
 
+        const run = () => {
+            // Bir sonraki tick — ana ekran boyandıktan sonra
+            requestAnimationFrame(() => {
+                reconcile();
+            });
+        };
+
         if (useFinanceStore.persist.hasHydrated()) {
-            reconcile();
+            run();
         }
-        return useFinanceStore.persist.onFinishHydration(() => {
-            reconcile();
-        });
-    }, [isAuthenticated]);
+        return useFinanceStore.persist.onFinishHydration(run);
+    }, [splashGone, isAuthenticated]);
 
     useEffect(() => {
         if (!canEnterApp || !navigationState?.key) return;
@@ -81,6 +92,12 @@ export default function RootLayout() {
         }
     }, [isAuthenticated, segments, navigationState?.key, canEnterApp, router]);
 
+    // Tema arka planını splash çıktıktan sonra uygula (siyah flash önle)
+    useEffect(() => {
+        if (!splashGone) return;
+        SystemUI.setBackgroundColorAsync(theme.background).catch(() => {});
+    }, [splashGone, theme.background]);
+
     const showApp = canEnterApp;
     const showSplash = !splashGone;
 
@@ -88,7 +105,7 @@ export default function RootLayout() {
         <GestureHandlerRootView
             style={[
                 styles.root,
-                { backgroundColor: showApp ? theme.background : BRAND_BLUE },
+                { backgroundColor: showSplash ? BRAND_BLUE : theme.background },
             ]}
         >
             {showApp && (
@@ -141,7 +158,7 @@ export default function RootLayout() {
                 />
             )}
 
-            {!showApp && <StatusBar style="light" />}
+            {showSplash && <StatusBar style="light" />}
         </GestureHandlerRootView>
     );
 }
